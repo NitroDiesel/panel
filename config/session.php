@@ -35,6 +35,18 @@ return [
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Absolute Session Lifetime
+    |--------------------------------------------------------------------------
+    |
+    | The "lifetime" above is an idle timeout: activity keeps a session alive
+    | forever. When set, this is the number of minutes after which a signed in
+    | session ends regardless of activity, and the user has to sign in again.
+    |
+    */
+
+    'absolute_lifetime' => env('SESSION_ABSOLUTE_LIFETIME'),
 
     /*
     |--------------------------------------------------------------------------

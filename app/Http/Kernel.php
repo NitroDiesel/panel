@@ -29,6 +29,7 @@ use Illuminate\Foundation\Http\Middleware\ValidatePostSize;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Pterodactyl\Http\Middleware\Api\Daemon\DaemonAuthenticate;
 use Pterodactyl\Http\Middleware\Api\Client\RequireClientApiKey;
+use Pterodactyl\Http\Middleware\EnforceAbsoluteSessionLifetime;
 use Pterodactyl\Http\Middleware\RequireTwoFactorAuthentication;
 use Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull;
 use Pterodactyl\Http\Middleware\Api\Client\SubstituteClientBindings;
@@ -62,6 +63,7 @@ class Kernel extends HttpKernel
             EncryptCookies::class,
             AddQueuedCookiesToResponse::class,
             StartSession::class,
+            EnforceAbsoluteSessionLifetime::class,
             ShareErrorsFromSession::class,
             VerifyCsrfToken::class,
             SubstituteBindings::class,
@@ -69,6 +71,7 @@ class Kernel extends HttpKernel
         ],
         'api' => [
             EnsureStatefulRequests::class,
+            EnforceAbsoluteSessionLifetime::class,
             'auth:sanctum',
             IsValidJson::class,
             TrackAPIKey::class,

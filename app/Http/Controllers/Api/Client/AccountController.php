@@ -58,6 +58,11 @@ class AccountController extends ClientApiController
             Activity::event('user:account.email-changed')
                 ->property(['old' => $original, 'new' => $request->validated('email')])
                 ->log();
+
+            // Issue a new session ID after a credential change; API key requests have no session.
+            if ($request->hasSession()) {
+                $request->session()->regenerate(true);
+            }
         }
 
         return new JsonResponse([], Response::HTTP_NO_CONTENT);

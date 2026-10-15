@@ -66,6 +66,8 @@ class TwoFactorController extends ClientApiController
 
         Activity::event('user:two-factor.create')->log();
 
+        $this->regenerateSession($request);
+
         return new JsonResponse([
             'object' => 'recovery_tokens',
             'attributes' => [
@@ -96,6 +98,20 @@ class TwoFactorController extends ClientApiController
 
         Activity::event('user:two-factor.delete')->log();
 
+        $this->regenerateSession($request);
+
         return new JsonResponse([], Response::HTTP_NO_CONTENT);
+    }
+
+    /**
+     * Issue a new session ID (and discard the old one) after the account's second factor
+     * changes, so a session ID captured before the change is useless afterwards. Requests
+     * authenticated with an API key have no session.
+     */
+    private function regenerateSession(Request $request): void
+    {
+        if ($request->hasSession()) {
+            $request->session()->regenerate(true);
+        }
     }
 }
