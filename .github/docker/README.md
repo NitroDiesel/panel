@@ -24,6 +24,23 @@ If you are using docker compose use
 docker compose exec panel php artisan p:user:make
 ```
 
+## Running as a non-root user
+By default the container starts as root and behaves as described above (nginx on ports 80/443, optional Let's Encrypt
+certificates). Starting it as the image's `nginx` user (uid `100`, gid `101`) instead runs every process unprivileged:
+
+* nginx serves plain HTTP on port `8080`; terminate TLS at a reverse proxy in front of the panel. `LE_EMAIL` is ignored.
+* Only `/tmp`, `/app/var` and `/app/storage` are written to, so the root filesystem can be mounted read-only.
+  `/app/var` and `/app/storage` must be writable by uid `100` (named volumes are set up with the right owner automatically).
+
+```
+docker run --user nginx --read-only --tmpfs /tmp -p 127.0.0.1:8080:8080 \
+  -v panel-var:/app/var -v panel-storage:/app/storage -e APP_URL=... -e DB_HOST=... ghcr.io/pterodactyl/panel
+```
+
+In either mode `GET /up` reports whether the panel can reach its database and cache, and the image's `HEALTHCHECK`
+uses it. Interactive tools such as `php artisan tinker` need a writable home directory when the root filesystem is
+read-only: `docker exec -e HOME=/tmp <container> php artisan tinker`.
+
 ## Environment Variables
 There are multiple environment variables to configure the panel when not providing your own `.env` file, see the following table for details on each available option.
 
@@ -52,6 +69,7 @@ Note: If your `APP_URL` starts with `https://` you need to provide an `LE_EMAIL`
 | `MAIL_PORT`         | The port of your mail driver instance                                          | maybe    |
 | `MAIL_USERNAME`     | The username for your mail driver                                              | maybe    |
 | `MAIL_PASSWORD`     | The password for your mail driver                                              | maybe    |
+| `APP_AUTO_MIGRATE`  | Run `migrate --seed --force` on startup (default: `true`)                     | no       |
 
 
 ### Cache drivers
