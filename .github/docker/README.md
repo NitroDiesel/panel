@@ -39,6 +39,7 @@ Note: If your `APP_URL` starts with `https://` you need to provide an `LE_EMAIL`
 | `DB_DATABASE`       | The name of the mysql database                                                 | yes      |
 | `DB_USERNAME`       | The mysql user                                                                 | yes      |
 | `DB_PASSWORD`       | The mysql password for the specified user                                      | yes      |
+| `DB_CONNECT_TIMEOUT`| Seconds to wait when connecting to mysql (default: PHP's socket timeout, 60s)  | no       |
 | `CACHE_DRIVER`      | The cache driver        (see [Cache drivers](#cache-drivers) for detais)       | yes      |
 | `SESSION_DRIVER`    |                                                                                | yes      |
 | `QUEUE_DRIVER`      |                                                                                | yes      |

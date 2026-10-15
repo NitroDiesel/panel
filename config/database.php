@@ -57,6 +57,9 @@ return [
                 PDO::MYSQL_ATTR_SSL_CERT => env('MYSQL_ATTR_SSL_CERT'),
                 PDO::MYSQL_ATTR_SSL_KEY => env('MYSQL_ATTR_SSL_KEY'),
                 PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => env('MYSQL_ATTR_SSL_VERIFY_SERVER_CERT', true),
+                // Seconds to wait when connecting. When unset, PHP's default_socket_timeout applies
+                // (60s by default), which holds a worker for that long if the host is unreachable.
+                PDO::ATTR_TIMEOUT => env('DB_CONNECT_TIMEOUT'),
             ]) : [],
         ],
 
@@ -82,6 +85,7 @@ return [
                 PDO::MYSQL_ATTR_SSL_CERT => env('MYSQL_ATTR_SSL_CERT'),
                 PDO::MYSQL_ATTR_SSL_KEY => env('MYSQL_ATTR_SSL_KEY'),
                 PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => env('MYSQL_ATTR_SSL_VERIFY_SERVER_CERT', true),
+                PDO::ATTR_TIMEOUT => env('DB_CONNECT_TIMEOUT'),
             ]) : [],
         ],
     ],
