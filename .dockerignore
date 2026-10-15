@@ -1,0 +1,22 @@
+# Keep the build context small and free of local state. Anything the image needs is
+# either part of the repository or produced inside the build stages.
+.git
+.github/workflows
+.github/ISSUE_TEMPLATE
+node_modules
+vendor
+public/assets/*
+!public/assets/svgs
+.env
+.env.*
+!.env.example
+bootstrap/cache/*.php
+storage/logs/*
+storage/framework/cache/data
+storage/framework/sessions/*
+storage/framework/views/*
+!storage/**/.gitignore
+tests
+coverage.xml
+.phpunit.result.cache
+.php-cs-fixer.cache
