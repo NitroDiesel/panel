@@ -11,7 +11,6 @@ use Pterodactyl\Jobs\RevokeSftpAccessJob;
 use Pterodactyl\Repositories\Eloquent\SubuserRepository;
 use Pterodactyl\Services\Subusers\SubuserCreationService;
 use Pterodactyl\Transformers\Api\Client\SubuserTransformer;
-use Pterodactyl\Repositories\Wings\DaemonRevocationRepository;
 use Pterodactyl\Http\Controllers\Api\Client\ClientApiController;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Subusers\GetSubuserRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Subusers\StoreSubuserRequest;
@@ -26,7 +25,6 @@ class SubuserController extends ClientApiController
     public function __construct(
         private SubuserRepository $repository,
         private SubuserCreationService $creationService,
-        private DaemonRevocationRepository $revocationRepository,
     ) {
         parent::__construct();
     }

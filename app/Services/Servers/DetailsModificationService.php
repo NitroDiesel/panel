@@ -7,8 +7,6 @@ use Pterodactyl\Models\Server;
 use Pterodactyl\Jobs\RevokeSftpAccessJob;
 use Illuminate\Database\ConnectionInterface;
 use Pterodactyl\Traits\Services\ReturnsUpdatedModels;
-use Pterodactyl\Repositories\Wings\DaemonServerRepository;
-use Pterodactyl\Repositories\Wings\DaemonRevocationRepository;
 
 class DetailsModificationService
 {
@@ -19,8 +17,6 @@ class DetailsModificationService
      */
     public function __construct(
         private ConnectionInterface $connection,
-        private DaemonServerRepository $serverRepository,
-        private DaemonRevocationRepository $revocationRepository,
     ) {
     }
 

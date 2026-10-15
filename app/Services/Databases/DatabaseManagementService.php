@@ -120,13 +120,12 @@ class DatabaseManagementService
                 // This is actually incorrect, it can be null in the case that the $database model
                 // itself isn't able to be created in Pterodactyl's database.
                 //
-                // @phpstan-ignore-next-line instanceof.alwaysFalse
                 if ($database instanceof Database) {
                     $this->repository->dropDatabase($database->database);
                     $this->repository->dropUser($database->username, $database->remote);
                     $this->repository->flush();
                 }
-            } catch (\Throwable $deletionException) { // @phpstan-ignore catch.neverThrown
+            } catch (\Throwable $deletionException) {
                 // Do nothing here. We've already encountered an issue before this point so no
                 // reason to prioritize this error over the initial one.
             }
