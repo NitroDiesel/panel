@@ -17,8 +17,12 @@ class SetSecurityHeaders
     private static array $headers = [
         'X-Frame-Options' => 'DENY',
         'X-Content-Type-Options' => 'nosniff',
-        'X-XSS-Protection' => '1; mode=block',
-        'Referrer-Policy' => 'no-referrer-when-downgrade',
+        // Browsers have removed the XSS auditor this used to enable, and where it still
+        // exists it can be abused to selectively disable scripts, so turn it off.
+        'X-XSS-Protection' => '0',
+        // Send the full URL as the referrer only to this origin, and nothing over HTTP.
+        'Referrer-Policy' => 'strict-origin-when-cross-origin',
+        'Permissions-Policy' => 'camera=(), microphone=(), geolocation=(), payment=()',
     ];
 
     /**
