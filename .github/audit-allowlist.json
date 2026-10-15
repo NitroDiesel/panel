@@ -1,0 +1,76 @@
+{
+    "yarn": [
+        {
+            "id": "GHSA-vfj7-8cjw-p6xm",
+            "package": "braces",
+            "reason": "Build-time only (tailwindcss -> chokidar/micromatch); never sees user input. Clears with the Tailwind upgrade.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-ggr8-5vv4-36mx",
+            "package": "deepmerge-ts",
+            "reason": "Direct dependency; the fix is in 8.x (major upgrade from 4.x). Only merges objects the panel constructs itself.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-9c47-m6qq-7p4h",
+            "package": "json5",
+            "reason": "Pulled in by react-hot-loader (development hot reloading) and only parses build configuration.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-r5fr-rjxr-66jc",
+            "package": "lodash-es",
+            "reason": "Via formik and styled-components; the panel never passes user input to _.template. Clears with the frontend dependency upgrades.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-28wg-ghj8-5hjv",
+            "package": "nanoid",
+            "reason": "Build-time only (tailwindcss -> postcss); the affected generators are not called with attacker-controlled sizes. Clears with the Tailwind upgrade.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-2v37-7h3g-55p8",
+            "package": "nanoid",
+            "reason": "Build-time only (tailwindcss -> postcss); the affected generators are not called with attacker-controlled sizes. Clears with the Tailwind upgrade.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-xwg4-73v4-xw9w",
+            "package": "nanoid",
+            "reason": "Build-time only (tailwindcss -> postcss); the affected generators are not called with attacker-controlled sizes. Clears with the Tailwind upgrade.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-9wv6-86v2-598j",
+            "package": "path-to-regexp",
+            "reason": "Via react-router-dom 5; route patterns are static strings in the bundle, not user input. Clears with react-router 6.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-c2c7-rcm5-vvqj",
+            "package": "picomatch",
+            "reason": "Build-time glob matching (tailwindcss, styled-components babel plugin) over repository paths, not user input.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-6g55-p6wh-862q",
+            "package": "postcss",
+            "reason": "Build-time only (tailwindcss); processes this repository's own CSS, not user input. Clears with the Tailwind upgrade.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-r28c-9q8g-f849",
+            "package": "postcss",
+            "reason": "Build-time only (tailwindcss); processes this repository's own CSS, not user input. Clears with the Tailwind upgrade.",
+            "expires": "2027-01-15"
+        },
+        {
+            "id": "GHSA-68fv-2mgg-jv7q",
+            "package": "source-map-js",
+            "reason": "Build-time only (tailwindcss -> postcss); parses this repository's own source maps. Clears with the Tailwind upgrade.",
+            "expires": "2027-01-15"
+        }
+    ]
+}

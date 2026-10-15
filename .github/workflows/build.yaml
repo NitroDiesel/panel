@@ -30,4 +30,7 @@ jobs:
       - run: yarn tsc
       - run: yarn lint
       - run: yarn test
+      # Fails on high/critical advisories in production dependencies that aren't in
+      # .github/audit-allowlist.json (or whose entry has expired).
+      - run: node .github/scripts/yarn-audit.js
       - run: yarn build:production
