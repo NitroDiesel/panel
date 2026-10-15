@@ -17,6 +17,7 @@ class StoreApiKeyRequest extends ClientApiRequest
             'description' => $rules['memo'],
             'allowed_ips' => [...$rules['allowed_ips'], 'max:50'],
             'allowed_ips.*' => 'string',
+            'expires_at' => ['nullable', 'date', 'after:now'],
         ];
     }
 

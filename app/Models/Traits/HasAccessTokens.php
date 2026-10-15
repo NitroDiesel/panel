@@ -27,7 +27,7 @@ trait HasAccessTokens
         return $this->hasMany(Sanctum::$personalAccessTokenModel);
     }
 
-    public function createToken(?string $memo, ?array $ips): NewAccessToken
+    public function createToken(?string $memo, ?array $ips, ?\DateTimeInterface $expiresAt = null): NewAccessToken
     {
         /** @var ApiKey $token */
         $token = $this->tokens()->forceCreate([
@@ -37,6 +37,7 @@ trait HasAccessTokens
             'token' => encrypt($plain = Str::random(ApiKey::KEY_LENGTH)),
             'memo' => $memo ?? '',
             'allowed_ips' => $ips ?? [],
+            'expires_at' => $expiresAt,
         ]);
 
         return new NewAccessToken($token, $plain);

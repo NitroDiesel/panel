@@ -21,6 +21,7 @@ class ApiKeyTransformer extends BaseClientTransformer
             'description' => $model->memo,
             'allowed_ips' => $model->allowed_ips,
             'last_used_at' => $model->last_used_at ? $model->last_used_at->toAtomString() : null,
+            'expires_at' => $model->expires_at ? $model->expires_at->toAtomString() : null,
             'created_at' => $model->created_at->toAtomString(),
         ];
     }
