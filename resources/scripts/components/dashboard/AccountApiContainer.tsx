@@ -75,6 +75,12 @@ export default () => {
                                     <p css={tw`text-2xs text-neutral-300 uppercase`}>
                                         Last used:&nbsp;
                                         {key.lastUsedAt ? format(key.lastUsedAt, 'MMM do, yyyy HH:mm') : 'Never'}
+                                        {key.expiresAt &&
+                                            (key.expiresAt <= new Date() ? (
+                                                <span css={tw`ml-2 text-red-400`}>Expired</span>
+                                            ) : (
+                                                <>&nbsp;·&nbsp;Expires: {format(key.expiresAt, 'MMM do, yyyy HH:mm')}</>
+                                            ))}
                                     </p>
                                 </div>
                                 <p css={tw`text-sm ml-4 hidden md:block`}>

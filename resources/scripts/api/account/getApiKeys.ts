@@ -6,6 +6,7 @@ export interface ApiKey {
     allowedIps: string[];
     createdAt: Date | null;
     lastUsedAt: Date | null;
+    expiresAt: Date | null;
 }
 
 export const rawDataToApiKey = (data: any): ApiKey => ({
@@ -14,6 +15,7 @@ export const rawDataToApiKey = (data: any): ApiKey => ({
     allowedIps: data.allowed_ips,
     createdAt: data.created_at ? new Date(data.created_at) : null,
     lastUsedAt: data.last_used_at ? new Date(data.last_used_at) : null,
+    expiresAt: data.expires_at ? new Date(data.expires_at) : null,
 });
 
 export default (): Promise<ApiKey[]> => {
