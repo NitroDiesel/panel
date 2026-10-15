@@ -61,7 +61,7 @@ Each is an XS PR with no behavior change for correctly configured installs. Ship
 
 ### 0.2 Stop logging generated secrets · P0 · XS · Upstream: yes
 **Why:** F1. Container logs often ship to third-party aggregators.
-**Change:** remove the `echo` lines that print `APP_KEY` and `HASHIDS_SALT`, and print `Generated app key.` instead. Generate the key with `php artisan key:generate --show` (base64, 32 random bytes) instead of `tr -dc` over urandom. Only affects first boot (no existing `var/.env`).
+**Change:** remove the `echo` lines that print `APP_KEY` and `HASHIDS_SALT`, and print `Generated app key.` instead. Generate the key as `base64:` + `base64_encode(random_bytes(32))` via `php -r` (the format `key:generate` uses) instead of 32 alphanumerics from `tr -dc` over urandom. `artisan key:generate --show` can't be used: `SettingsServiceProvider` needs the encrypter, so artisan won't boot without a key. Only affects first boot (no existing `var/.env`).
 **Acceptance:**
 - [ ] First boot with an empty `var/` volume: `docker logs` contains neither value (grep for the values in `var/.env`).
 - [ ] The generated `APP_KEY` starts with `base64:` and the panel encrypts and decrypts (log in, enable 2FA).

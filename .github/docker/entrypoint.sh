@@ -15,11 +15,12 @@ else
   rm -rf /app/.env
   touch /app/var/.env
 
-  ## manually generate a key because key generate --force fails
+  ## generate a key in the same format as key:generate (32 random bytes, base64). artisan
+  ## can't be used here because the application refuses to boot without a key.
   if [ -z $APP_KEY ]; then
      echo -e "Generating key."
-     APP_KEY=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
-     echo -e "Generated app key: $APP_KEY"
+     APP_KEY=$(php -r 'echo "base64:".base64_encode(random_bytes(32));')
+     echo -e "Generated app key."
      echo -e "APP_KEY=$APP_KEY" > /app/var/.env
   else
     echo -e "APP_KEY exists in environment, using that."
@@ -30,7 +31,7 @@ else
   if [ -z $HASHIDS_SALT ]; then
      echo -e "Generating hashids salt."
      HASHIDS_SALT=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9!@#$%^&*()_+?><~' | fold -w 20 | head -n 1)
-     echo -e "Generated hashids salt: $HASHIDS_SALT"
+     echo -e "Generated hashids salt."
      echo -e "HASHIDS_SALT=$HASHIDS_SALT" >> /app/var/.env
   else
     echo -e "HASHIDS_SALT exists in environment, using that."
