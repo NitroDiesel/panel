@@ -1,0 +1,142 @@
+# Hardened Pterodactyl Panel stack: panel + MariaDB + Redis.
+#
+# Run ./init.sh once to create .env (generated secrets) and panel.env (settings), then
+# `docker compose up -d`. Only the panel's HTTP port is published, on 127.0.0.1 by
+# default; put a TLS-terminating reverse proxy in front of it. See README.md.
+
+name: pterodactyl
+
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging:
+    driver: local
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  panel:
+    <<: *hardening
+    build:
+      context: ../..
+    image: nitrodiesel/panel:local
+    user: nginx
+    env_file: panel.env
+    environment:
+      APP_ENV: production
+      APP_ENVIRONMENT_ONLY: "false"
+      DB_HOST: database
+      DB_PORT: "3306"
+      DB_DATABASE: panel
+      DB_USERNAME: pterodactyl
+      DB_PASSWORD: ${DB_PASSWORD:?run ./init.sh first}
+      DB_CONNECT_TIMEOUT: "2"
+      REDIS_HOST: cache
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?run ./init.sh first}
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_DRIVER: redis
+    ports:
+      - "${PANEL_BIND:-127.0.0.1}:${PANEL_PORT:-8080}:8080"
+    volumes:
+      - panel-var:/app/var
+      - panel-storage:/app/storage
+    tmpfs:
+      - /tmp:size=128m
+    deploy:
+      resources:
+        limits:
+          pids: 256
+          cpus: "2"
+          memory: 1g
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+
+  database:
+    <<: *hardening
+    image: mariadb:11.4@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
+    user: mysql
+    environment:
+      MARIADB_DATABASE: panel
+      MARIADB_USER: pterodactyl
+      MARIADB_PASSWORD: ${DB_PASSWORD:?run ./init.sh first}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?run ./init.sh first}
+      # root may only log in from inside the database container
+      MARIADB_ROOT_HOST: localhost
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - db-data:/var/lib/mysql
+    tmpfs:
+      - /tmp:size=64m
+      - /run/mysqld:size=1m
+    deploy:
+      resources:
+        limits:
+          pids: 128
+          cpus: "2"
+          memory: 1g
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+    networks:
+      - backend
+
+  cache:
+    <<: *hardening
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    user: redis
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?run ./init.sh first}
+    # The password comes from the environment rather than the command line so it never
+    # shows up in `docker inspect` arguments. The default user may not run FLUSHALL,
+    # CONFIG, DEBUG or MODULE. Sessions and queued jobs live here, so the append-only
+    # file is kept to survive restarts.
+    command:
+      - sh
+      - -c
+      - >-
+        exec redis-server
+        --user default reset on ">$$REDISCLI_AUTH" "~*" "&*" +@all -flushall -config -debug -module
+        --appendonly yes
+    volumes:
+      - redis-data:/data
+    deploy:
+      resources:
+        limits:
+          pids: 64
+          cpus: "1"
+          memory: 256m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - backend
+
+networks:
+  # No route out of the host: only the panel can reach the database and cache.
+  backend:
+    internal: true
+  # The panel needs outbound access to Wings nodes, mail and reCAPTCHA.
+  frontend:
+
+volumes:
+  panel-var:
+  panel-storage:
+  db-data:
+  redis-data:
