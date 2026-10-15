@@ -40,6 +40,9 @@ class RouteServiceProvider extends ServiceProvider
             // Registered ahead of every group so the React catch-all route never matches it, and
             // outside of the "web" group so that health probes never start a session.
             Route::get('/up', Base\HealthController::class)->name('health');
+            Route::post('/csp-report', Base\CspReportController::class)
+                ->middleware('throttle:csp-report')
+                ->name('csp-report');
 
             Route::middleware('web')->group(function () {
                 Route::middleware(['auth.session', RequireTwoFactorAuthentication::class])
@@ -102,6 +105,12 @@ class RouteServiceProvider extends ServiceProvider
             }
 
             return $limits;
+        });
+
+        // Browsers send one report per violation, which can add up quickly on a page with
+        // a misconfigured policy.
+        RateLimiter::for('csp-report', function (Request $request) {
+            return Limit::perMinute(60)->by($request->ip());
         });
 
         // Changes to a user's credentials and second factors are limited per user and per

@@ -231,7 +231,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
     $('[data-toggle="popover"]').popover({
         placement: 'auto'
     });

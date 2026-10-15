@@ -94,7 +94,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
         $(document).ready(function() {
             $('#pImportToNest').select2();
         });

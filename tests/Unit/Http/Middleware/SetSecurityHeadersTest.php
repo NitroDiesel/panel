@@ -11,7 +11,7 @@ class SetSecurityHeadersTest extends TestCase
 {
     public function testDefaultHeadersAreSet(): void
     {
-        $response = (new SetSecurityHeaders())->handle(Request::create('/'), fn () => new Response('ok'));
+        $response = $this->app->make(SetSecurityHeaders::class)->handle(Request::create('/'), fn () => new Response('ok'));
 
         $this->assertSame('DENY', $response->headers->get('X-Frame-Options'));
         $this->assertSame('nosniff', $response->headers->get('X-Content-Type-Options'));
@@ -24,7 +24,7 @@ class SetSecurityHeadersTest extends TestCase
 
     public function testHeadersAlreadyOnTheResponseAreKept(): void
     {
-        $response = (new SetSecurityHeaders())->handle(Request::create('/'), function () {
+        $response = $this->app->make(SetSecurityHeaders::class)->handle(Request::create('/'), function () {
             return new Response('ok', 200, ['X-Frame-Options' => 'SAMEORIGIN', 'Referrer-Policy' => 'no-referrer']);
         });
 

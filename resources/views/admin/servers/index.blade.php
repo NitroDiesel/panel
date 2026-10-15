@@ -80,7 +80,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
         $('.console-popout').on('click', function (event) {
             event.preventDefault();
             window.open($(this).attr('href'), 'Pterodactyl Console', 'width=800,height=400');

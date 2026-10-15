@@ -57,7 +57,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
     $('#deletebtn').click(function (event) {
         event.preventDefault();
         swal({

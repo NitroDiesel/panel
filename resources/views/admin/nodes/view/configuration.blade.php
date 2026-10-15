@@ -63,7 +63,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
     $('#configTokenBtn').on('click', function (event) {
         $.ajax({
             method: 'POST',

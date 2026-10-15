@@ -7,11 +7,15 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Pterodactyl\Extensions\Themes\Theme;
+use Pterodactyl\Http\ContentSecurityPolicy;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Pterodactyl\Extensions\Laracasts\NonceViewBinder;
+use Laracasts\Utilities\JavaScript\Transformers\Transformer;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -26,6 +30,11 @@ class AppServiceProvider extends ServiceProvider
         View::share('appIsGit', $this->versionData()['is_git'] ?? false);
 
         Paginator::useBootstrap();
+
+        // Every inline <script> must carry the request's nonce: <script @cspNonce>.
+        Blade::directive('cspNonce', function () {
+            return '<?php echo \'nonce="\' . e(app(\\' . ContentSecurityPolicy::class . '::class)->nonce()) . \'"\'; ?>';
+        });
 
         // If the APP_URL value is set with https:// make sure we force it here. Theoretically
         // this should just work with the proxy logic, but there are a lot of cases where it
@@ -64,6 +73,17 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton('extensions.themes', function () {
             return new Theme();
+        });
+
+        $this->app->singleton(ContentSecurityPolicy::class);
+
+        // Replaces the binding from laracasts/utilities so that the script it outputs for
+        // JavaScript::put() carries the Content-Security-Policy nonce.
+        $this->app->singleton('JavaScript', function ($app) {
+            return new Transformer(
+                new NonceViewBinder($app['events'], config('javascript.bind_js_vars_to_this_view')),
+                config('javascript.js_namespace')
+            );
         });
     }
 

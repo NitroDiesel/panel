@@ -145,7 +145,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
         $('.pOptions').select2();
         $('[data-action="delete"]').on('mouseenter', function (event) {
             $(this).find('i').html(' Delete Variable');

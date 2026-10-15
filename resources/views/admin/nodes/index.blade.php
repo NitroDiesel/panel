@@ -75,7 +75,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
     (function pingNodes() {
         $('td[data-action="ping"]').each(function(i, element) {
             $.ajax({

@@ -254,7 +254,7 @@
 @section('footer-scripts')
     @parent
 
-    <script>
+    <script @cspNonce>
         $(document).ready(function() {
             $('#pEggs').select2({
                 placeholder: 'Select eggs..',

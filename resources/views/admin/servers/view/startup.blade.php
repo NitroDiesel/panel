@@ -106,7 +106,7 @@
 @section('footer-scripts')
     @parent
     {!! Theme::js('vendor/lodash/lodash.js') !!}
-    <script>
+    <script @cspNonce>
     function escapeHtml(str) {
         var div = document.createElement('div');
         div.appendChild(document.createTextNode(str));

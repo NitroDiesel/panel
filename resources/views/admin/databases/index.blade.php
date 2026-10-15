@@ -124,7 +124,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
         $('#pNodeId').select2();
     </script>
 @endsection

@@ -316,7 +316,7 @@
     @parent
     {!! Theme::js('vendor/lodash/lodash.js') !!}
 
-    <script type="application/javascript">
+    <script @cspNonce type="application/javascript">
         // Persist 'Service Variables'
         function serviceVariablesUpdated(eggId, ids) {
             @if (old('egg_id'))
@@ -340,7 +340,7 @@
 
     {!! Theme::js('js/admin/new-server.js?v=20220530') !!}
 
-    <script type="application/javascript">
+    <script @cspNonce type="application/javascript">
         $(document).ready(function() {
             // Persist 'Server Owner' select2
             @if (old('owner_id'))

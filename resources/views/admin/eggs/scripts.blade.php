@@ -97,7 +97,7 @@
     @parent
     {!! Theme::js('vendor/ace/ace.js') !!}
     {!! Theme::js('vendor/ace/ext-modelist.js') !!}
-    <script>
+    <script @cspNonce>
     $(document).ready(function () {
         $('#pCopyScriptFrom').select2();
 

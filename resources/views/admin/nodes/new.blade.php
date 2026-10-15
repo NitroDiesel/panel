@@ -169,7 +169,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
         $('#pLocationId').select2();
     </script>
 @endsection

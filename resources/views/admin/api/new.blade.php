@@ -84,7 +84,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
         $(document).ready(function() {
             
             function setButtonActive(activeButton) {

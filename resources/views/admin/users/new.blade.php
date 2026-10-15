@@ -108,7 +108,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>$("#gen_pass_bttn").click(function (event) {
+    <script @cspNonce>$("#gen_pass_bttn").click(function (event) {
             event.preventDefault();
             $.ajax({
                 type: "GET",

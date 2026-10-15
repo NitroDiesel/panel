@@ -103,7 +103,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
     $('#pDatabaseHost').select2();
     $('[data-action="remove"]').click(function (event) {
         event.preventDefault();

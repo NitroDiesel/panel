@@ -69,7 +69,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
         $(document).ready(function() {
             $('[data-action="revoke-key"]').click(function (event) {
                 var self = $(this);

@@ -107,7 +107,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
         $('#deleteButton').on('mouseenter', function (event) {
             $(this).find('i').html(' Delete Nest');
         }).on('mouseleave', function (event) {

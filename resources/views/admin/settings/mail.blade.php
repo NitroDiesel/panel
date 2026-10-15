@@ -113,7 +113,7 @@
 @section('footer-scripts')
     @parent
 
-    <script>
+    <script @cspNonce>
         function saveSettings() {
             return $.ajax({
                 method: 'PATCH',

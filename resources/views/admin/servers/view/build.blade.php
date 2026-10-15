@@ -179,7 +179,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
     $('#pAddAllocations').select2();
     $('#pRemoveAllocations').select2();
     $('#pAllocation').select2();

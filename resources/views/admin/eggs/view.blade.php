@@ -195,7 +195,7 @@
 
 @section('footer-scripts')
     @parent
-    <script>
+    <script @cspNonce>
     $('#pConfigFrom').select2();
     $('#deleteButton').on('mouseenter', function (event) {
         $(this).find('i').html(' Delete Egg');

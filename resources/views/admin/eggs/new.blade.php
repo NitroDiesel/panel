@@ -143,7 +143,7 @@
 @section('footer-scripts')
     @parent
     {!! Theme::js('vendor/lodash/lodash.js') !!}
-    <script>
+    <script @cspNonce>
     $(document).ready(function() {
         $('#pNestId').select2().change();
         $('#pConfigFrom').select2();

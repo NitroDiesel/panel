@@ -21,12 +21,12 @@
 
         @section('user-data')
             @if(!is_null(Auth::user()))
-                <script>
+                <script @cspNonce>
                     window.PterodactylUser = {!! json_encode(Auth::user()->toVueObject()) !!};
                 </script>
             @endif
             @if(!empty($siteConfiguration))
-                <script>
+                <script @cspNonce>
                     window.SiteConfiguration = {!! json_encode($siteConfiguration) !!};
                 </script>
             @endif

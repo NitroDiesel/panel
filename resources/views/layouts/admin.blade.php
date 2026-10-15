@@ -160,7 +160,7 @@
         </div>
         @section('footer-scripts')
             <script src="/js/keyboard.polyfill.js" type="application/javascript"></script>
-            <script>keyboardeventKeyPolyfill.polyfill();</script>
+            <script @cspNonce>keyboardeventKeyPolyfill.polyfill();</script>
 
             {!! Theme::js('vendor/jquery/jquery.min.js?t={cache-version}') !!}
             {!! Theme::js('vendor/sweetalert/sweetalert.min.js?t={cache-version}') !!}
@@ -173,7 +173,7 @@
             <script src="/js/autocomplete.js" type="application/javascript"></script>
 
             @if(Auth::user()->root_admin)
-                <script>
+                <script @cspNonce>
                     $('#logoutButton').on('click', function (event) {
                         event.preventDefault();
 
@@ -200,7 +200,7 @@
                 </script>
             @endif
 
-            <script>
+            <script @cspNonce>
                 $(function () {
                     $('[data-toggle="tooltip"]').tooltip();
                 })
