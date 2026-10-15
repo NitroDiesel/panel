@@ -36,6 +36,8 @@ services:
       DB_USERNAME: pterodactyl
       DB_PASSWORD: ${DB_PASSWORD:?run ./init.sh first}
       DB_CONNECT_TIMEOUT: "2"
+      # Report Content-Security-Policy violations to /csp-report without blocking anything.
+      APP_CSP_MODE: report
       REDIS_HOST: cache
       REDIS_PASSWORD: ${REDIS_PASSWORD:?run ./init.sh first}
       CACHE_DRIVER: redis
