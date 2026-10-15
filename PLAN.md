@@ -62,10 +62,11 @@ Each is an XS PR with no behavior change for correctly configured installs. Ship
 ### 0.2 Stop logging generated secrets · P0 · XS · Upstream: yes
 **Why:** F1. Container logs often ship to third-party aggregators.
 **Change:** remove the `echo` lines that print `APP_KEY` and `HASHIDS_SALT`, and print `Generated app key.` instead. Generate the key as `base64:` + `base64_encode(random_bytes(32))` via `php -r` (the format `key:generate` uses) instead of 32 alphanumerics from `tr -dc` over urandom. `artisan key:generate --show` can't be used: `SettingsServiceProvider` needs the encrypter, so artisan won't boot without a key. Only affects first boot (no existing `var/.env`).
+**Status:** done in `9d7645eb2` (shipped with Phase 1, which depends on it).
 **Acceptance:**
-- [ ] First boot with an empty `var/` volume: `docker logs` contains neither value (grep for the values in `var/.env`).
-- [ ] The generated `APP_KEY` starts with `base64:` and the panel encrypts and decrypts (log in, enable 2FA).
-- [ ] Booting with an existing `var/.env` leaves it byte-for-byte unchanged.
+- [x] First boot with an empty `var/` volume: `docker logs` contains neither value (grep for the values in `var/.env`). *Checked in both root and non-root mode.*
+- [x] The generated `APP_KEY` starts with `base64:` and the panel encrypts and decrypts (log in, enable 2FA). *Login and 2FA enable over HTTP on the compose stack; `totp_secret` stored encrypted.*
+- [x] Booting with an existing `var/.env` leaves it byte-for-byte unchanged. *sha256 identical across a legacy-mode restart.*
 
 ### 0.3 Throttle password reset submission · P0 · XS · Upstream: yes
 **Why:** F3. Lets an attacker hammer reset tokens without limit.
@@ -91,10 +92,14 @@ Order: **1.1 → 1.2 → 1.3.** The compose stack's acceptance criteria (read-on
 **Change:**
 - `GET /up`, registered in `RouteServiceProvider` **outside** the `web`/`api` groups: no session, no CSRF, no auth, no throttle. It must be registered before any SPA catch-all.
 - Returns `200 {"status":"ok"}` when the DB (`select 1`) and cache (`get` of a fixed key) both respond, otherwise `503 {"status":"fail"}`. No versions, hostnames or error text in the body.
+- Opt-in `DB_CONNECT_TIMEOUT` (sets `PDO::ATTR_TIMEOUT`; unset = upstream behavior). Needed because `SettingsServiceProvider` queries the DB on **every** request before any controller runs, so without it an unreachable DB holds each request, health probes included, for `default_socket_timeout` (60 s) and can exhaust php-fpm workers. A timeout private to the health check doesn't help for the same reason.
+
+**Status:** done in `4961fc551` (endpoint) and `df0df98d6` (`DB_CONNECT_TIMEOUT`).
+**Known limitation:** when Redis is down, `AppServiceProvider::boot()` (`Cache::remember('git-version')`) throws before the controller runs, so `/up` returns a generic **500**, not 503, after predis's 5 s connect timeout. Probes still read it as unhealthy. Making boot tolerate a dead cache is out of scope here.
 **Acceptance:**
-- [ ] Integration tests: 200 when healthy; 503 when the DB connection throws (mocked); 503 when the cache throws.
-- [ ] The response has no `Set-Cookie` header, and `redis-cli dbsize` doesn't grow across 100 probes.
-- [ ] With the DB container stopped, the 503 arrives within 5 s (the healthcheck timeout). Set a short PDO connect timeout if needed.
+- [x] Integration tests: 200 when healthy; 503 when the DB connection throws (mocked); 503 when the cache throws. *Plus a POST → 405 routing test. Mutation check: removing the checks fails 2 tests.*
+- [x] The response has no `Set-Cookie` header, and `redis-cli dbsize` doesn't grow across 100 probes. *dbsize 2 → 2; for contrast, `/auth/login` sets 2 cookies.*
+- [x] With the DB container stopped, the 503 arrives within 5 s (the healthcheck timeout). *4.0–4.1 s with `DB_CONNECT_TIMEOUT=2` (two attempts: settings load, then the check). Without it: no response within 15 s.*
 
 ### 1.2 Non-root, read-only-capable image · P1 · M · Upstream: yes (open a Discussion first) · Depends: 0.2, 1.1
 **Key design decision:** non-root is **opt-in at runtime**, not forced with a Dockerfile `USER` line. The entrypoint branches on `id -u`:
@@ -102,42 +107,46 @@ Order: **1.1 → 1.2 → 1.3.** The compose stack's acceptance criteria (read-on
 - **non-root mode:** nginx on `:8080`, no certbot, no crond. supervisord, nginx, php-fpm and the queue run as the `nginx` user, and nothing is written outside `/tmp`, `/app/var` and `/app/storage`.
 
 **Change:**
-1. Add a `.dockerignore`: `node_modules`, `vendor`, `.git`, `storage/*` (keep the skeleton dirs), `tests`, `public/assets`, `*.md`, `deploy/`, `branding/`.
+1. Add a `.dockerignore`: `node_modules`, `vendor`, `.git`, `.env*`, runtime files under `storage/`, `tests`, built `public/assets`. *Not `*.md`: that would drop `LICENSE.md`, which MIT requires shipping with copies. `.gitignore` used to ignore `.dockerignore` itself; that line is removed.*
 2. Add a supervisord `[program:scheduler]` that runs `php artisan schedule:work` in both modes, replacing the root crontab's `schedule:run` line.
 3. Build time: create the `/app/.env -> /app/var/.env` symlink and an `nginx-unprivileged.conf` (listen 8080, pid and temp paths under `/tmp`). Replace `chmod 777` with `chown nginx:nginx` on `storage`, `bootstrap/cache` and `var` only.
-4. supervisord: socket, pid and logs under `/tmp`, with child logs going to stdout/stderr. php-fpm: drop the `user`/`group` directives in non-root mode (they're ignored and generate warnings).
-5. Entrypoint in non-root mode: skip the `mkdir /var/log/*`, the symlink and the nginx config copy (all done at build time). Fail fast with a clear message if `/app/var` isn't writable.
-6. `HEALTHCHECK` that runs `wget -qO- http://127.0.0.1:${PORT}/up` (`PORT` is 80 or 8080 depending on mode).
+4. supervisord: socket, pid and logs under `/tmp`, with child logs going to stdout/stderr. *php-fpm keeps `user`/`group` (one config for both modes; non-root only logs a NOTICE) and now logs to stderr via a `[global]` section.*
+5. Entrypoint in non-root mode: skip the `mkdir /var/log/*`, the certbot/nginx config copy and crond. Fail fast with a clear message if `/app/var` or `/app/storage` isn't writable. *The `.env` link is only recreated if it isn't already the baked symlink.*
+6. `HEALTHCHECK` that runs `.github/docker/healthcheck.sh`: port 8080 when non-root, 80 when root, `https://127.0.0.1` (no cert check) when `LE_EMAIL` is set. *The LE variant is unverified: there's no real certificate here.*
+6b. *Laravel's package/service manifests go to `/tmp` (`APP_PACKAGES_CACHE`/`APP_SERVICES_CACHE`), since `bootstrap/cache` is in the read-only image.*
 7. `APP_AUTO_MIGRATE` (default `true`) gates `migrate --seed --force` on boot.
 8. Look up the `nginx` uid/gid in the image (Alpine is normally `100:101`; don't hardcode `101`) and document it in `.github/docker/README.md`.
 
+**Status:** done in `94bad2e1d` (`.dockerignore`) and `799808981` (image). `nginx` is uid `100`, gid `101`. In read-only mode `php artisan tinker` needs `-e HOME=/tmp` (documented).
 **Acceptance:**
-- [ ] `docker run --read-only --tmpfs /tmp --user nginx -v var:/app/var -v storage:/app/storage …` boots to healthy.
-- [ ] In that container, `ps -o user,comm` shows no `root` processes.
-- [ ] The unchanged `docker-compose.example.yml` still boots, serves on 80, and the LE path still runs when `LE_EMAIL` is set.
-- [ ] The scheduler runs in both modes: a scheduled task fires within 2 min of boot (check `activity_logs` or a test schedule).
-- [ ] The image is ≤ the v1.15.1 image size + 5%, and the build context is < 50 MB with `.dockerignore`.
+- [x] `docker run --read-only --tmpfs /tmp --user nginx -v var:/app/var -v storage:/app/storage …` boots to healthy. *About 40 s against MariaDB 11.4 + Redis 7.*
+- [x] In that container, `ps -o user,comm` shows no `root` processes.
+- [x] The unchanged `docker-compose.example.yml` still boots, serves on 80, and the LE path still runs when `LE_EMAIL` is set. *Run with an override that only swaps the image and redirects the `/srv` bind mounts. The LE path produces output identical to the v1.15.1 image up to the ACME call.*
+- [x] The scheduler runs in both modes: a scheduled task fires within 2 min of boot (check `activity_logs` or a test schedule). *`p:schedule:process` runs under `schedule:work` as `nginx` in both modes.*
+- [x] The image is ≤ the v1.15.1 image size + 5%, and the build context is < 50 MB with `.dockerignore`. *322 MB vs 340 MB (`ghcr.io/pterodactyl/panel:v1.15.1`); context 9.1 MB.*
 
 ### 1.3 Fork compose stack · P1 · M · Upstream: no (fork-only, `deploy/compose/`) · Depends: 1.2
-**Files:** `compose.yml`, `panel.env.example`, `db.env.example`, `cache.env.example`, `README.md`, `verify.sh`. The real `*.env` files are gitignored and loaded with `env_file:`.
+**Files:** `compose.yml`, `init.sh`, `panel.env.example`, `README.md`, `verify.sh`. *Changed from separate db/cache env files: the DB password is needed by both `panel` and `database`, so `init.sh` generates all passwords once into compose's own `.env` (mode 0600, gitignored) and copies `panel.env.example` → `panel.env` for settings.*
 
 **Spec:**
 - Services: `panel` (fork image built from 1.2, running as `nginx`), `database` (`mariadb:11.4` LTS, pinned by digest), `cache` (`redis:7-alpine`, pinned by digest; see Open question 3).
 - Networks: `backend` (`internal: true`) has `database`, `cache` and `panel`. `frontend` has `panel` only, since it needs outbound access to Wings, SMTP and reCAPTCHA. **Only the panel publishes a port:** `${PANEL_BIND:-127.0.0.1}:${PANEL_PORT:-8080}:8080`. TLS terminates at the user's reverse proxy. Document `TRUSTED_PROXIES` with Caddy, Traefik and nginx examples.
-- Every service gets: an explicit non-root `user:`; `security_opt: [no-new-privileges:true]`; `cap_drop: [ALL]` with **no** add-backs (the README must justify any added cap); `read_only: true` plus `tmpfs` (`/tmp`; plus `/run/mysqld` for MariaDB); `pids_limit`; memory and CPU limits; `restart: unless-stopped`; `logging: { driver: local, options: { max-size: 10m, max-file: "3" } }`.
-- MariaDB: `user: mysql`, `MARIADB_AUTO_UPGRADE=1`, named volume `db-data`, no `--default-authentication-plugin`. Healthcheck: `healthcheck.sh --connect --innodb_initialized`.
-- Redis: `requirepass` from the env file. An ACL denies `FLUSHALL CONFIG DEBUG MODULE` to the default user (`rename-command` is deprecated). `--save ""` by default, with persistence optional. Healthcheck: `redis-cli ping` with `REDISCLI_AUTH` set from env, never `-a` on argv.
-- Panel: `depends_on: { database: { condition: service_healthy }, cache: { condition: service_healthy } }`. Healthcheck on `/up`. Named volumes `panel-var` and `panel-storage`.
+- Every service gets: an explicit non-root `user:`; `security_opt: [no-new-privileges:true]`; `cap_drop: [ALL]` with **no** add-backs (the README must justify any added cap); `read_only: true` plus `tmpfs` (`/tmp`; plus `/run/mysqld` for MariaDB); PID, memory and CPU limits (all under `deploy.resources.limits`: Compose 2.26 rejects `pids_limit` alongside them); `restart: unless-stopped`; `logging: { driver: local, options: { max-size: 10m, max-file: "3" } }`.
+- MariaDB: `user: mysql`, `MARIADB_AUTO_UPGRADE=1`, `MARIADB_ROOT_HOST=localhost`, named volume `db-data`, no `--default-authentication-plugin`. Healthcheck: `healthcheck.sh --connect --innodb_initialized`.
+- Redis: the password comes from env (`REDISCLI_AUTH`), never from argv. An ACL (`--user default reset on >… -flushall -config -debug -module`) denies those commands to the default user (`rename-command` is deprecated). **AOF persistence on** (`--appendonly yes`), not `--save ""` as first drafted: sessions and queued jobs live in Redis, and `--save ""` would contradict the "session survives restart" criterion below. Healthcheck: `redis-cli ping`.
+- Panel: `depends_on: { database: { condition: service_healthy }, cache: { condition: service_healthy } }`. Healthcheck on `/up` (inherited from the image). Named volumes `panel-var` and `panel-storage`. `DB_CONNECT_TIMEOUT=2` (with 3 s, `/up` took 6.1 s with the DB down).
 - README: setup in three commands, upgrades (pull, then `up -d`; `APP_AUTO_MIGRATE`), backup and restore (`mariadb-dump` plus the `panel-var` volume, which holds `APP_KEY`), and how to run Wings next to the stack. Wings must **not** join `backend`.
 
+**Status:** done in `b637fde1d`. `verify.sh` runs 38 checks and passes on the stack as shipped. The queue check was shown to go red with the worker stopped.
+**Not verified:** the Caddy, nginx and Traefik snippets in the README (no public host or certificates here). The `TRUSTED_PROXIES` = frontend-gateway guidance *was* verified: a login sending `X-Forwarded-For: 203.0.113.9` was logged with that IP.
 **Acceptance** (automated in `verify.sh`, runnable in CI):
-- [ ] `docker compose config` validates. From a clean checkout with copied env examples, `up -d` reaches all-`healthy` in ≤ 120 s.
-- [ ] `docker compose port database 3306` and `docker compose port cache 6379` return nothing, and `ss -ltn` on the host shows no 3306/6379 listener.
-- [ ] `docker compose exec database` can't reach the internet (internal network). The panel can reach DB, cache and an external host.
-- [ ] `docker inspect` on each service shows `ReadonlyRootfs=true`, `no-new-privileges`, `CapDrop=[ALL]`, empty `CapAdd`, non-root `User`, and memory/PID limits.
-- [ ] `php artisan cache:clear` and the queue worker still work under the Redis ACL.
-- [ ] After setup, `git status` shows no new tracked files, and `*.env` is ignored.
-- [ ] `p:user:make` → log in → `docker compose restart` → the session is still valid.
+- [x] `docker compose config` validates. From a clean checkout with copied env examples, `up -d` reaches all-`healthy` in ≤ 120 s. *50 s from empty volumes (after `./init.sh`).*
+- [x] `docker compose port database 3306` and `docker compose port cache 6379` return nothing, and `ss -ltn` on the host shows no 3306/6379 listener.
+- [x] `docker compose exec database` can't reach the internet (internal network). The panel can reach DB, cache and an external host.
+- [x] `docker inspect` on each service shows `ReadonlyRootfs=true`, `no-new-privileges`, `CapDrop=[ALL]`, empty `CapAdd`, non-root `User`, and memory/PID limits.
+- [x] `php artisan cache:clear` and the queue worker still work under the Redis ACL. *`FLUSHALL`/`CONFIG` return NOPERM; a queued `cache:forget` job runs.*
+- [x] After setup, `git status` shows no new tracked files, and `*.env` is ignored.
+- [x] `p:user:make` → log in → `docker compose restart` → the session is still valid. *Tested with reCAPTCHA disabled via a scratch override; an unauthenticated control gets 401.*
 
 ---
 
@@ -305,7 +314,8 @@ Each one needs a short design note and upstream buy-in (a GitHub Discussion) bef
 
 ## Testing notes
 
-- **Docker access:** the previous draft says Docker 26 with the **vfs** driver works on this box. As of 2026-10-15 the session user gets `permission denied` on `/var/run/docker.sock`, so add the user to the `docker` group (or use rootless Docker) before Phase 1 work. vfs copies every layer in full: use `docker builder prune` between runs and rely on the `.dockerignore` from 1.2.
+- **Docker access:** use `sudo docker` / `sudo docker compose` (the daemon was started manually; storage driver **vfs**, so prune with `docker builder prune` now and then). **Gotcha (fixed 2026-10-15, lasts until reboot):** a stale iptables-legacy ruleset had `FORWARD` policy `DROP`, which silently blocked traffic between containers on user-defined networks (DNS resolved, TCP timed out). Fixed with `sudo iptables-legacy -P FORWARD ACCEPT`. If containers can't reach each other after a reboot, check `sudo iptables-legacy -S FORWARD` first. This host's DNS also answers *unknown* names with a black-hole address (`198.18.0.1`), so a stopped container's name hangs instead of failing; always put a hard `timeout -s KILL` on wait loops.
+- **PHP toolchain without a host install:** build a throwaway `php:8.3-cli-alpine` image with `bcmath gd pdo_mysql zip` + composer, and run it as `--user 1000:1000 -v $PWD:/app`. For integration tests, run MariaDB 11.4 on a user-defined network (or `--network container:<db>` with `DB_HOST=127.0.0.1`). The full suite takes several minutes; baseline is 374 integration tests (all flagged "risky" for error-handler cleanup, which is pre-existing) and 93 unit tests. `phpstan` reports 29 pre-existing errors.
 - **Wings** needs the host Docker socket (`/var/run/docker.sock`, `/var/lib/pterodactyl`). Run it beside the stack, not inside `backend`. Nested Docker under vfs is fine for smoke tests only; test real game servers on a real node.
 - **PHP:** `vendor/bin/phpunit tests/Unit` (with `DB_HOST=UNIT_NO_DB`) and `vendor/bin/phpunit tests/Integration` with `.env.ci`, the same as `ci.yaml`. For integration tests against the compose stack, use `docker compose run`, not published ports.
 - **Frontend:** `yarn tsc && yarn lint && yarn test && yarn build:production`.
