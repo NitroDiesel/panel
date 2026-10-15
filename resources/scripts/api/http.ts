@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { store } from '@/state';
+import { tooManyRequests } from '@/lib/formatters';
 
 const http: AxiosInstance = axios.create({
     withCredentials: true,
@@ -41,6 +42,10 @@ export default http;
  * make sure we display the message from the server back to the user if we can.
  */
 export function httpErrorToHuman(error: any): string {
+    if (error.response && error.response.status === 429) {
+        return tooManyRequests(error.response.headers && error.response.headers['retry-after']);
+    }
+
     if (error.response && error.response.data) {
         let { data } = error.response;
 

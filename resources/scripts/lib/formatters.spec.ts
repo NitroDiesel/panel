@@ -1,4 +1,4 @@
-import { bytesToString, ip, mbToBytes } from '@/lib/formatters';
+import { bytesToString, ip, mbToBytes, tooManyRequests } from '@/lib/formatters';
 
 describe('@/lib/formatters.ts', function () {
     describe('mbToBytes()', function () {
@@ -56,6 +56,30 @@ describe('@/lib/formatters.ts', function () {
             expect(ip('1')).toBe('1');
             expect(ip('foobar')).toBe('foobar');
             expect(ip('127.0.0.1:25565')).toBe('[127.0.0.1:25565]');
+        });
+    });
+
+    describe('tooManyRequests()', function () {
+        it('should include the wait time from Retry-After', function () {
+            expect(tooManyRequests('42')).toBe('Too many attempts. Try again in 42 seconds.');
+            expect(tooManyRequests(1)).toBe('Too many attempts. Try again in 1 second.');
+            expect(tooManyRequests('0.4')).toBe('Too many attempts. Try again in 1 second.');
+            expect(tooManyRequests(119)).toBe('Too many attempts. Try again in 119 seconds.');
+        });
+
+        it('should switch to minutes for longer waits', function () {
+            expect(tooManyRequests(120)).toBe('Too many attempts. Try again in 2 minutes.');
+            expect(tooManyRequests('3599')).toBe('Too many attempts. Try again in 60 minutes.');
+        });
+
+        it('should fall back to a generic message without a usable Retry-After', function () {
+            const generic = 'Too many attempts. Please wait a moment and try again.';
+
+            expect(tooManyRequests(undefined)).toBe(generic);
+            expect(tooManyRequests(null)).toBe(generic);
+            expect(tooManyRequests('')).toBe(generic);
+            expect(tooManyRequests('0')).toBe(generic);
+            expect(tooManyRequests('Wed, 21 Oct 2026 07:28:00 GMT')).toBe(generic);
         });
     });
 });

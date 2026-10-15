@@ -31,4 +31,21 @@ function ip(value: string): string {
     return /([a-f0-9:]+:+)+[a-f0-9]+/.test(value) ? `[${value}]` : value;
 }
 
-export { ip, mbToBytes, bytesToString };
+/**
+ * Returns a message for a rate limited (429) response, using the number of seconds from
+ * its Retry-After header when the server provided one.
+ */
+function tooManyRequests(retryAfter?: string | number | null): string {
+    const seconds = Math.ceil(Number(retryAfter));
+    if (!retryAfter || !Number.isFinite(seconds) || seconds <= 0) {
+        return 'Too many attempts. Please wait a moment and try again.';
+    }
+
+    if (seconds < 120) {
+        return `Too many attempts. Try again in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}.`;
+    }
+
+    return `Too many attempts. Try again in ${Math.ceil(seconds / 60)} minutes.`;
+}
+
+export { ip, mbToBytes, bytesToString, tooManyRequests };
