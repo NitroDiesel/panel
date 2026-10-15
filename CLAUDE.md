@@ -40,6 +40,6 @@ yarn install --frozen-lockfile && yarn tsc && yarn lint && yarn test && yarn bui
 ```
 
 - `tests/Unit` runs without a database. `tests/Integration` extends `IntegrationTestCase` and hits a real MariaDB.
-- Jest is configured (`jest.config.js`, `resources/scripts/setup-tests.ts`) but **no Jest tests exist yet**. The first one sets the pattern: co-locate it as `*.test.ts(x)` next to the code it covers.
+- Jest specs are co-located `*.spec.ts` files (e.g. `resources/scripts/lib/formatters.spec.ts`).
 
 **This box:** PHP, Composer and Yarn aren't installed on the host, and host Node is v20 (< 22). Run them in containers via `sudo docker` (see PLAN.md → Testing notes for the PHP dev image, the test DB setup and the iptables/DNS gotchas). Report checks you couldn't run as not run.

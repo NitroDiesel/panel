@@ -78,9 +78,10 @@ Each is an XS PR with no behavior change for correctly configured installs. Ship
 ### 0.4 Security header defaults (no CSP) · P0 · XS · Upstream: yes
 **Why:** F8. These changes are safe for every install.
 **Change** in `SetSecurityHeaders::$headers`: set `X-XSS-Protection: 0`; `Referrer-Policy: strict-origin-when-cross-origin`; add `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`. Keep XFO and nosniff. COOP, HSTS and CSP stay out of this PR (see 2.1).
+**Status:** done in `03d448cd6` (shipped with Phase 2 as the prerequisite of 2.1).
 **Acceptance:**
-- [ ] Unit test asserts the exact header set on a normal response.
-- [ ] A header that's already set on the response is still not overwritten (existing behavior).
+- [x] Unit test asserts the exact header set on a normal response. *Fails on the pre-change code.*
+- [x] A header that's already set on the response is still not overwritten (existing behavior).
 
 ---
 
@@ -163,10 +164,19 @@ Each item is its own PR.
 - HSTS: `Strict-Transport-Security: max-age=31536000` only when `$request->isSecure()` **and** `APP_HSTS=true` (default off). `Cross-Origin-Opener-Policy: same-origin` ships here too, behind the same mode flag (it can break reCAPTCHA popups).
 - Split it into two PRs if review asks: (a) nonce plumbing with no headers, then (b) the header and modes.
 
+**Status:** done in `46c83c067` (IE shims), `f41abfeeb` (CSP/HSTS/COOP) and `cceee10b7` (fork stack in `report` mode). Corrections to the spec above, all found by the browser check:
+- **reCAPTCHA comes from `recaptcha.net`**, not `google.com`: the login form's `reaptcha` library hardcodes `https://recaptcha.net/recaptcha/api.js`. The baseline as drafted blocked reCAPTCHA, so login broke in `enforce` mode. `script-src`/`frame-src` now allow `recaptcha.net`, `www.recaptcha.net` and `www.google.com` under `/recaptcha/`, plus `www.gstatic.com/recaptcha/` for scripts.
+- **`JavaScript::put()` (laracasts/utilities) echoes its own inline `<script>`**: 6 admin pages (node allocation/servers, server new/startup/manage, egg new). The static view scan can't see it. `Pterodactyl\Extensions\Laracasts\NonceViewBinder` replaces the package's binder and adds the nonce.
+- **Plain-HTTP Wings nodes**: the console uses `ws://`, which `wss:` doesn't cover, so the console broke in `enforce` mode. `connect-src` now lists the exact `http://`/`ws://` origins of `scheme = http` nodes (cached for 60 s). Past 50 such nodes it falls back to `http: ws:` to keep the header within proxy buffer limits.
+- No `__webpack_nonce__` was needed: chunks load as same-origin files, and styled-components' `<style>` tags are covered by `'unsafe-inline'` for styles.
+- COOP is sent only in `enforce` mode.
+
+**How it was checked:** `ContentSecurityPolicyTest` (14 tests: each mode, nonce rotation and matching, admin pages, injected JS variables, extra sources, an injection attempt via extra sources, HTTP nodes and the 50-node fallback, HSTS, the report endpoint, and a static scan that every inline `<script>` in the views uses `@cspNonce`). Plus headless Chrome (official Puppeteer image) against `php -S` with `APP_CSP_MODE=enforce`, recording `securitypolicyviolation` events and console errors.
 **Acceptance:**
-- [ ] Feature tests assert the headers for each mode, and that the nonce changes per request and matches the rendered `<script nonce>`.
-- [ ] With `enforce`, zero CSP violations in the browser console on this checklist (included in the PR): login with reCAPTCHA on, 2FA checkpoint, dashboard, console (websocket to a Wings node), file editor, backups, every admin index page, and admin node/server/egg edit pages.
-- [ ] With `off` (the default), the response headers are byte-identical to post-0.4.
+- [x] Feature tests assert the headers for each mode, and that the nonce changes per request and matches the rendered `<script nonce>`.
+- [ ] With `enforce`, zero CSP violations in the browser console on this checklist (included in the PR): login with reCAPTCHA on, 2FA checkpoint, dashboard, console (websocket to a Wings node), file editor, backups, every admin index page, and admin node/server/egg edit pages. *56 of 56 pages clean, including reCAPTCHA's script and both frames, the 2FA checkpoint through to the dashboard, every client and server page, and every admin index and edit page. The console was checked against both an HTTPS and an HTTP node. **Left open** because there was no live Wings: the websocket connection, file listing and backups were only attempted, so console output, opening a real file in the editor (language-mode chunks) and uploads are unexercised.*
+- [x] With `off` (the default), the response headers are byte-identical to post-0.4. *Diffed every header of `GET /auth/login` booted from `03d448cd6` and from the final tree: identical.*
+- [x] *(added)* `report` mode works end to end: an injected violation is allowed, reported by the browser to `/csp-report`, and logged at debug level with only the trimmed fields.
 
 ### 2.2 Login, 2FA and account rate limits · P1 · S · Upstream: yes
 **Change** (`RouteServiceProvider::configureRateLimiting`):
@@ -176,30 +186,35 @@ Each item is its own PR.
 - **Server reinstall** gets a new `ResourceLimit::Reinstall` case (per server, 1 per 5 min), matching the existing pattern. Backups already have a `ResourceLimit` and are out of scope.
 - **UI:** `httpErrorToHuman` shows "Too many attempts — try again in N s" on 429, using `Retry-After`.
 
+**Status:** done in `d8798b058` (limits) and `c5e9628b0` (UI message). `account.sensitive` is keyed **per user and action** (the spec didn't say), so creating API keys can't lock a user out of changing their password.
+**Found, not fixed (latent upstream bugs, worth an upstream issue):** the controllers' existing `ThrottlesLogins` lockout keys on `input('email')` (the trait's default) while the login field is `user`, so it's really **5 failures per IP per minute, regardless of username**. Its 429 has no `Retry-After`. And `config('auth.lockout.attempts'/'time')` is never applied: the controller sets `$maxLoginAttempts`, but the trait reads `$maxAttempts`.
 **Acceptance:**
-- [ ] One integration test per limiter: going over the limit returns 429 with `Retry-After`, and the bucket keys behave as specified (a different IP against the same account is still limited).
-- [ ] Jest test for the 429 message formatting.
-- [ ] The existing test suite passes unchanged.
+- [x] One integration test per limiter: going over the limit returns 429 with `Retry-After`, and the bucket keys behave as specified (a different IP against the same account is still limited). *10 tests, covering per-account login across IPs, the checkpoint per pending login across IPs and per IP, each sensitive action, and reinstall per server across users. All fail without the change.*
+- [x] Jest test for the 429 message formatting. *`formatters.spec.ts` plus `http.spec.ts`; the latter fails without the `httpErrorToHuman` change.*
+- [x] The existing test suite passes unchanged.
 
 ### 2.3 Session and cookie hardening · P1 · S · Upstream: yes
 **Change:**
 - `session.secure` defaults to `str_starts_with(env('APP_URL'), 'https://')` when `SESSION_SECURE_COOKIE` is unset. An explicit env value still wins.
 - Regenerate the session ID on 2FA enable/disable and email change (password change already logs out other devices).
 - Optional `SESSION_ABSOLUTE_LIFETIME` (minutes, default off) through a small middleware that stores the login timestamp. Document `SESSION_LIFETIME` and the opt-in `__Host-` cookie name.
+**Status:** done in `db404d884` (secure default, docs in `.env.example`, `__Host-` test) and `e8b814570` (regeneration plus absolute lifetime). Regeneration uses `regenerate(true)` (the old session is destroyed) and is skipped for API-key requests, which have no session. The lifetime middleware calls `forgetGuards()` after logging out, because Sanctum's guard may already have cached the user earlier in the request.
 **Acceptance:**
-- [ ] Tests: with an https `APP_URL` the cookie has `Secure`; with http it doesn't; an explicit env value overrides both.
-- [ ] Tests: the session ID changes after 2FA enable, 2FA disable and email change.
-- [ ] Test: with the absolute lifetime set, a session older than it is logged out even when active.
+- [x] Tests: with an https `APP_URL` the cookie has `Secure`; with http it doesn't; an explicit env value overrides both. *Config evaluated under each environment, plus the real `Set-Cookie`.*
+- [x] Tests: the session ID changes after 2FA enable, 2FA disable and email change. *And the old session is gone; a rejected change keeps the ID.*
+- [x] Test: with the absolute lifetime set, a session older than it is logged out even when active. *Session authenticated through the guard's session key and used every 2 h; 401 at 4 h. Unset means unchanged behavior.*
 
 ### 2.4 API key expiry in the client UI · P2 · S · Upstream: yes
 **Why:** F11. The column exists but users can't use it.
 **Change:** `expires_at` on client API key create (presets: never, 7, 30, 90 days, or a custom date) and shown in the key list ("Expired" badge). Confirm that Sanctum rejects expired tokens for both client and application keys, and add a test either way.
+**Status:** done in `dd8281c33` (API) and `220210bee` (UI). Custom dates expire at the end of that day in the user's time zone. Sanctum already refused expired tokens; the tests confirm it for both APIs.
 **Acceptance:**
-- [ ] Integration test: an expired key returns 401 on the client API and the application API.
-- [ ] Creating a key with no expiry behaves exactly as it does today.
-- [ ] Jest or RTL test for the expiry preset → date mapping.
+- [x] Integration test: an expired key returns 401 on the client API and the application API.
+- [x] Creating a key with no expiry behaves exactly as it does today. *New test plus the unchanged `ApiKeyControllerTest`.*
+- [x] Jest or RTL test for the expiry preset → date mapping. *`lib/expiry.spec.ts`. Also smoke-tested in headless Chrome: a 7-day key was stored with exactly 168 h of validity and listed, and a past custom date was rejected.*
 
 ### 2.5 2FA nudges (no forced change) · P2 · S · Upstream: yes (open a Discussion first)
+**Status:** skipped in this pass at the owner's request (2026-10-15), pending an upstream Discussion and Open question 1.
 **Change:**
 - A dismissible dashboard banner for users without TOTP, linking to account security. Dismissal lasts 30 days (see Open question 1 for where to store it).
 - The admin user list gets a 2FA column and filter. The admin overview shows a count of admins without 2FA.
@@ -216,10 +231,16 @@ Each item is its own PR.
 - Pin every `uses:` by commit SHA, with the tag in a trailing comment.
 - `docker.yaml`: Trivy scan of the built image (fail on critical with a fix available), a `syft` SBOM as a build artifact, and the SARIF uploaded to code scanning. (Can be a follow-up PR, P2.)
 - Track major frontend upgrades as separate future work, outside this plan: React 16 → 18, react-router 5 → 6, xterm 4 → `@xterm/xterm` 5, swr 0.2 → 2.
+**Status:** done in `cda4771ef`, `875444d80`, `45f864859`, `5c4b58dc0`, `18d8ada63`, `879a2489c`, `6eb63a64c` and `fce6c9a7e`. What changed from the spec:
+- **The dependencies were fixed before the audit gate went in.** `composer audit` reported 15 advisories (10 high, in `league/commonmark`), fixed by updates within the existing constraints (commonmark, flysystem, phpseclib, laravel/framework 12.70). axios 1.13.5 had 12 high advisories and was bumped to 1.20.0, still within `^1.13.2`.
+- **phpstan has no baseline.** All 19 errors were fixed at the source: `self::` for private statics, `@return $this` on the Wings repository setters, unused constructor dependencies removed, the generics-aware ignore pattern. The 7 stale inline ignores were deleted, and `reportUnmatchedIgnoredErrors` stays on: CI analyses one PHP version against the lockfile, so the result is deterministic.
+- **The yarn audit gate is a dependency-free script** (`.github/scripts/yarn-audit.js`), since Yarn 1 can't ignore advisories. The 12 remaining high advisories are allowlisted with reasons, all expiring 2027-01-15. Composer is clean, so its native ignore list isn't needed yet.
+- **Every `uses:` is SHA-pinned** with the exact release in a comment, including `softprops/action-gh-release` (v2.5.0).
+- **Not done:** the Trivy/SBOM step (optional follow-up), and CI triggers for `nitro/main`; the workflows only run on PRs to `1.0-develop`.
 **Acceptance:**
-- [ ] CI is green on `nitro/main` with the new steps.
-- [ ] A test PR that adds a known-vulnerable package fails the audit job.
-- [ ] `grep -E 'uses: [^@]+@v[0-9]' .github/workflows/*` returns nothing.
+- [ ] CI is green on `nitro/main` with the new steps. *Not verifiable without a push. Every step passes locally: phpstan (0 errors), composer audit (clean), the yarn audit gate, Jest (56), tsc, lint, build, and phpunit.*
+- [ ] A test PR that adds a known-vulnerable package fails the audit job. *Shown locally only: with `lodash@4.17.15` added, the gate exits 1. An expired entry → 1, a removed entry → 1, a malformed entry → 2.*
+- [x] `grep -E 'uses: [^@]+@v[0-9]' .github/workflows/*` returns nothing. *All 17 `uses:` lines are a 40-hex SHA plus a tag comment.*
 
 ---
 
@@ -318,6 +339,12 @@ Each one needs a short design note and upstream buy-in (a GitHub Discussion) bef
 - **PHP toolchain without a host install:** build a throwaway `php:8.3-cli-alpine` image with `bcmath gd pdo_mysql zip` + composer, and run it as `--user 1000:1000 -v $PWD:/app`. For integration tests, run MariaDB 11.4 on a user-defined network (or `--network container:<db>` with `DB_HOST=127.0.0.1`). The full suite takes several minutes; baseline is 374 integration tests (all flagged "risky" for error-handler cleanup, which is pre-existing) and 93 unit tests. `phpstan` reports 29 pre-existing errors.
 - **Wings** needs the host Docker socket (`/var/run/docker.sock`, `/var/lib/pterodactyl`). Run it beside the stack, not inside `backend`. Nested Docker under vfs is fine for smoke tests only; test real game servers on a real node.
 - **PHP:** `vendor/bin/phpunit tests/Unit` (with `DB_HOST=UNIT_NO_DB`) and `vendor/bin/phpunit tests/Integration` with `.env.ci`, the same as `ci.yaml`. For integration tests against the compose stack, use `docker compose run`, not published ports.
-- **Frontend:** `yarn tsc && yarn lint && yarn test && yarn build:production`.
+- **Frontend:** `yarn tsc && yarn lint && yarn test && yarn build:production` (in `node:22-alpine`). Jest specs are co-located `*.spec.ts` files.
+- **Test harness gotchas (found in Phase 2):**
+  - JSON test requests send cookies only after `withCredentials()`.
+  - The test app is shared across requests, so guards (and config changed by `shouldUse`) carry over.
+  - `/admin` views need `LARAVEL_START` defined.
+  - The shared `testing` DB accumulates rows (e.g. nodes) from tests that commit, so don't assert on table-wide contents.
+- **Browser checks without the firewall change:** run the panel with `php -S 127.0.0.1:8000 …/Illuminate/Foundation/resources/server.php` from `public/`. `artisan serve` drops most env vars. Run it and `ghcr.io/puppeteer/puppeteer` with `--network container:<db>`; sharing a network namespace needs no bridge forwarding.
 - **Security checks:** `curl -sI http://127.0.0.1:8080/` for headers (compare against Mozilla Observatory's rules by hand, since the box isn't public); `trivy image <img>`; `composer audit --locked`; `yarn audit`.
 - **Smoke test for each PR:** log in, 2FA enable/disable, create a server against a test Wings node (when available), open the console, edit a file, create and restore a backup.
