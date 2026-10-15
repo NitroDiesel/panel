@@ -76,16 +76,41 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected function configureRateLimiting(): void
     {
-        // Authentication rate limiting. For login and checkpoint endpoints we'll apply
-        // a limit of 10 requests per minute, for the forgot password endpoint apply a
-        // limit of two per minute for the requester so that there is less ability to
-        // trigger email spam.
+        // Authentication rate limiting. For the forgot password endpoint apply a limit of
+        // two per minute for the requester so that there is less ability to trigger email
+        // spam. Login attempts are limited per IP and per account, so that guessing one
+        // account's password from many addresses is slowed down as well. The 2FA checkpoint
+        // is limited per IP and per pending login, which caps the number of codes that can
+        // be tried against an account no matter how many addresses are used.
         RateLimiter::for('authentication', function (Request $request) {
             if ($request->route()->named('auth.post.forgot-password')) {
                 return Limit::perMinute(2)->by($request->ip());
             }
 
-            return Limit::perMinute(10)->by($request->ip());
+            if ($request->route()->named('auth.login-checkpoint')) {
+                $limits = [Limit::perMinute(5)->by('checkpoint:ip:' . $request->ip())];
+                if ($user = $request->session()->get('auth_confirmation_token.user_id')) {
+                    $limits[] = Limit::perMinute(5)->by("checkpoint:user:$user");
+                }
+
+                return $limits;
+            }
+
+            $limits = [Limit::perMinute(10)->by($request->ip())];
+            if (is_string($username = $request->input('user')) && ($username = mb_strtolower(trim($username))) !== '') {
+                $limits[] = Limit::perMinute(5)->by("login:user:$username");
+            }
+
+            return $limits;
+        });
+
+        // Changes to a user's credentials and second factors are limited per user and per
+        // action, independent of the general client API limit.
+        RateLimiter::for('account.sensitive', function (Request $request) {
+            return Limit::perMinutes(
+                config('http.rate_limit.account_sensitive_period'),
+                config('http.rate_limit.account_sensitive')
+            )->by($request->user()->uuid . ':' . $request->method() . ':' . $request->route()->uri());
         });
 
         // Configure the throttles for both the application and client APIs below.

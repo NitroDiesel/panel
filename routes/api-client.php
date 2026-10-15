@@ -24,24 +24,26 @@ Route::prefix('/account')->middleware(AccountSubject::class)->group(function () 
     Route::prefix('/')->withoutMiddleware(RequireTwoFactorAuthentication::class)->group(function () {
         Route::get('/', [Client\AccountController::class, 'index'])->name('api:client.account');
         Route::get('/two-factor', [Client\TwoFactorController::class, 'index']);
-        Route::post('/two-factor', [Client\TwoFactorController::class, 'store']);
-        Route::post('/two-factor/disable', [Client\TwoFactorController::class, 'delete']);
+        Route::post('/two-factor', [Client\TwoFactorController::class, 'store'])->middleware('throttle:account.sensitive');
+        Route::post('/two-factor/disable', [Client\TwoFactorController::class, 'delete'])->middleware('throttle:account.sensitive');
     });
 
     Route::put('/email', [Client\AccountController::class, 'updateEmail'])
-        ->middleware('throttle')
+        ->middleware(['throttle', 'throttle:account.sensitive'])
         ->name('api:client.account.update-email');
-    Route::put('/password', [Client\AccountController::class, 'updatePassword'])->name('api:client.account.update-password');
+    Route::put('/password', [Client\AccountController::class, 'updatePassword'])
+        ->middleware('throttle:account.sensitive')
+        ->name('api:client.account.update-password');
 
     Route::get('/activity', Client\ActivityLogController::class)->name('api:client.account.activity');
 
     Route::get('/api-keys', [Client\ApiKeyController::class, 'index']);
-    Route::post('/api-keys', [Client\ApiKeyController::class, 'store']);
+    Route::post('/api-keys', [Client\ApiKeyController::class, 'store'])->middleware('throttle:account.sensitive');
     Route::delete('/api-keys/{identifier}', [Client\ApiKeyController::class, 'delete']);
 
     Route::prefix('/ssh-keys')->group(function () {
         Route::get('/', [Client\SSHKeyController::class, 'index']);
-        Route::post('/', [Client\SSHKeyController::class, 'store']);
+        Route::post('/', [Client\SSHKeyController::class, 'store'])->middleware('throttle:account.sensitive');
         Route::post('/remove', [Client\SSHKeyController::class, 'delete']);
     });
 });
@@ -147,7 +149,8 @@ Route::group([
 
     Route::group(['prefix' => '/settings'], function () {
         Route::post('/rename', [Client\Servers\SettingsController::class, 'rename']);
-        Route::post('/reinstall', [Client\Servers\SettingsController::class, 'reinstall']);
+        Route::post('/reinstall', [Client\Servers\SettingsController::class, 'reinstall'])
+            ->middleware([ResourceLimit::Reinstall->middleware()]);
         Route::put('/docker-image', [Client\Servers\SettingsController::class, 'dockerImage']);
     });
 });

@@ -98,6 +98,32 @@ class SettingsControllerTest extends ClientApiIntegrationTestCase
      * Test that a subuser receives a permissions error if they do not have the required permission
      * and attempt to reinstall a server.
      */
+    /**
+     * Reinstalling is limited to once every five minutes per server, regardless of which
+     * user asks for it.
+     */
+    public function testReinstallIsLimitedPerServer(): void
+    {
+        [$user, $server] = $this->generateTestAccount();
+        $subuser = $this->generateTestAccount([Permission::ACTION_SETTINGS_REINSTALL])[0];
+        $server->subusers()->create(['user_id' => $subuser->id, 'permissions' => [Permission::ACTION_SETTINGS_REINSTALL]]);
+
+        $this->mock(DaemonServerRepository::class)
+            ->expects('setServer')->andReturnSelf()
+            ->getMock()
+            ->expects('reinstall')->once()->andReturnUndefined();
+
+        $this->actingAs($user)->postJson("/api/client/servers/$server->uuid/settings/reinstall")
+            ->assertStatus(Response::HTTP_ACCEPTED);
+
+        // Pretend the install finished; while installing, server access is refused outright.
+        $server->refresh()->forceFill(['status' => null])->save();
+
+        $response = $this->actingAs($subuser)->postJson("/api/client/servers/$server->uuid/settings/reinstall");
+        $response->assertStatus(Response::HTTP_TOO_MANY_REQUESTS);
+        $this->assertGreaterThan(0, (int) $response->headers->get('Retry-After'));
+    }
+
     public function testSubuserCannotReinstallServerWithoutPermission()
     {
         [$user, $server] = $this->generateTestAccount([Permission::ACTION_WEBSOCKET_CONNECT]);

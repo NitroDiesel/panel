@@ -17,5 +17,9 @@ return [
 
         'application_period' => 1,
         'application' => env('APP_API_APPLICATION_RATELIMIT', 256),
+
+        // Password, email, 2FA, API key and SSH key changes, per user and action.
+        'account_sensitive_period' => 60,
+        'account_sensitive' => env('APP_API_ACCOUNT_SENSITIVE_RATELIMIT', 10),
     ],
 ];

@@ -24,6 +24,7 @@ enum ResourceLimit
     case Subuser;
     case Websocket;
     case FilePull;
+    case Reinstall;
 
     public function throttleKey(): string
     {
@@ -46,6 +47,7 @@ enum ResourceLimit
             self::Backup => Limit::perMinutes(15, 3),
             self::Database => Limit::perMinute(2),
             self::FilePull => Limit::perMinutes(10, 5),
+            self::Reinstall => Limit::perMinutes(5, 1),
             self::Subuser => Limit::perMinutes(15, 10),
             self::Websocket => Limit::perMinute(5),
             default => Limit::perMinute(2),
