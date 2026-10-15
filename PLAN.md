@@ -1,0 +1,313 @@
+# PLAN — NitroDiesel/panel improvements
+
+Base: `pterodactyl/panel` v1.15.1 (Laravel 12, PHP 8.2/8.3, React 16 + Tailwind 3, xterm 4, Yarn 1).
+Fork branch: `nitro/main`. Upstream target branch: `1.0-develop`.
+
+**Goals:** efficiency, reliability, security, and a UI that's intuitive for new users without slowing down advanced ones, delivered as small changes that can merge upstream.
+
+**Status:** spec only. Nothing below is implemented yet. Last checked against the code at `e98678c5a` (2026-10-15).
+
+---
+
+## Ground rules
+
+- **One PR = one concern.** Every item has an ID (e.g. `1.2`) and must rebase onto `1.0-develop` by itself, unless its `Depends` line says otherwise.
+- **Upstream defaults don't change unless it's a clear security fix.** Behavior changes go behind an env/config flag that defaults to upstream behavior. Fork-only defaults live in fork config (`deploy/`), not in code.
+- **No new runtime dependencies** unless an item explicitly says so.
+- **Tests ship with the change.** PHP: `tests/Unit` or `tests/Integration` (PHPUnit). TS: Jest. Every PR must pass `php-cs-fixer`, `phpstan`, `yarn tsc`, `yarn lint`, `yarn test` and `yarn build:production`. *Today CI does not run `phpstan` or `yarn test`; item 2.6 adds them.*
+- **Fork-only material** (`branding/`, `deploy/`) lives in paths upstream never touches, so merges stay conflict-free.
+- **Do the cheap work first:** P0 items are small, low-risk fixes for real problems and ship before anything else.
+
+**Priority key:** **P0** = security or correctness problem, ship first · **P1** = core goal of this fork · **P2** = valuable polish · **Backlog** = needs design and upstream discussion first.
+**Size key:** XS < 50 LOC · S < 200 · M < 600 · L = split it further.
+
+---
+
+## Verified findings
+
+Each claim was checked against the code at `e98678c5a`.
+
+| # | Area | Current state | File |
+|---|---|---|---|
+| F1 | Secrets in logs | Entrypoint `echo`s the generated `APP_KEY` and `HASHIDS_SALT` to stdout | `.github/docker/entrypoint.sh` |
+| F2 | Release workflow | Last commit added a step that dispatches to `pterodactyl/pterodactyl-cdn` using `secrets.CDN_DISPATCH_TOKEN`. There's no repository guard, so **every fork release job fails at that step** (the secret is empty) | `.github/workflows/release.yaml` |
+| F3 | Unthrottled endpoint | `POST /auth/password/reset` sits outside the `throttle:authentication` group | `routes/auth.php` |
+| F4 | Container runs as root | supervisord (`user=root`), php-fpm master, nginx master and crond all run as root; `chmod 777 -R bootstrap storage`; there's no `.dockerignore` | `Dockerfile`, `.github/docker/supervisord.conf` |
+| F5 | Root filesystem writes at boot | Entrypoint writes `/app/.env` (symlink), `/var/log/*` and `/etc/nginx/http.d/panel.conf`, which blocks `read_only` | `.github/docker/entrypoint.sh` |
+| F6 | Compose example | Inline DB passwords, `links:`, publishes 80/443, unpinned `mariadb:11` / `redis:alpine`, Redis has no auth, passes a MySQL-only `--default-authentication-plugin` flag | `docker-compose.example.yml` |
+| F7 | No health endpoint | Probes have to hit `/`, which starts a session (a Redis write per probe) | `routes/`, `RouteServiceProvider` |
+| F8 | Security headers | XFO, nosniff, deprecated `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: no-referrer-when-downgrade`; no CSP, HSTS or Permissions-Policy | `app/Http/Middleware/SetSecurityHeaders.php` |
+| F9 | Rate limits | Login **and** 2FA checkpoint share a 10/min-per-IP bucket. There's no per-account bucket and no per-user bucket for account-security actions. Per-server `ResourceLimit` already covers backups, databases, schedules, subusers, allocations, websocket and file pull | `RouteServiceProvider`, `app/Enum/ResourceLimit.php` |
+| F10 | Session | `secure` cookie unset by default, 720-minute lifetime, `lax`. Password change already calls `logoutOtherDevices`; 2FA enable/disable does **not** regenerate the session | `config/session.php`, `AccountController`, `TwoFactorController` |
+| F11 | API keys | `expires_at` column already exists (2023 migration) and the model is Sanctum's token model, but the client UI can't set it or show it. `last_used_at` is already displayed | `app/Models/ApiKey.php`, `AccountApiContainer.tsx` |
+| F12 | Supply chain | No Dependabot/Renovate. Most actions are pinned by tag (only `softprops/action-gh-release` uses a SHA). No dependency audit, SBOM or image scan | `.github/` |
+| F13 | Search hotkey | Only `metaKey + /` opens search, so Windows/Linux users have no shortcut | `components/dashboard/search/SearchContainer.tsx:13` |
+| F14 | CSP blockers | Admin layout loads CSS/fonts from `cdnjs.cloudflare.com` and IE-only shims from `oss.maxcdn.com`. 28 Blade views contain inline `<script>` | `resources/views/layouts/admin.blade.php` |
+
+**Already done upstream, so dropped from the previous draft:** logging failed logins and 2FA failures (`auth:fail` via `AuthenticationListener`); persisting console command history (`usePersistedState`); the console search bar (`Ctrl/⌘+F`, `xterm-addon-search-bar`); confirming Kill (it's only offered while `stopping`, behind a modal); "log out other sessions" on password change; showing API key `last_used_at`; adding a `Retry-After` header on 429 (Laravel's `ThrottleRequests` sends it).
+
+---
+
+## Phase 0 — Quick wins (P0)
+
+Each is an XS PR with no behavior change for correctly configured installs. Ship all four before anything else.
+
+### 0.1 Guard the CDN dispatch step to the upstream repo · P0 · XS · Upstream: yes
+**Why:** F2. Fork releases fail, and a misconfigured fork could hand its tags to upstream's manifest.
+**Change:** add `github.repository == 'pterodactyl/panel'` to the step's `if:`. Replace the `contains(ref_name, 'rc'|'beta'|'alpha')` prerelease check with an anchored match on a `-` suffix (e.g. `!contains(github.ref_name, '-')`). Today's substring check would treat a tag like `v1.12.0-arc` as a prerelease.
+**Acceptance:**
+- [ ] A tag push on the fork completes the release job green and skips the dispatch step.
+- [ ] The workflow logic for `pterodactyl/panel` is unchanged for `v1.x.y` tags and still skips `v1.x.y-rc.1`.
+
+### 0.2 Stop logging generated secrets · P0 · XS · Upstream: yes
+**Why:** F1. Container logs often ship to third-party aggregators.
+**Change:** remove the `echo` lines that print `APP_KEY` and `HASHIDS_SALT`, and print `Generated app key.` instead. Generate the key with `php artisan key:generate --show` (base64, 32 random bytes) instead of `tr -dc` over urandom. Only affects first boot (no existing `var/.env`).
+**Acceptance:**
+- [ ] First boot with an empty `var/` volume: `docker logs` contains neither value (grep for the values in `var/.env`).
+- [ ] The generated `APP_KEY` starts with `base64:` and the panel encrypts and decrypts (log in, enable 2FA).
+- [ ] Booting with an existing `var/.env` leaves it byte-for-byte unchanged.
+
+### 0.3 Throttle password reset submission · P0 · XS · Upstream: yes
+**Why:** F3. Lets an attacker hammer reset tokens without limit.
+**Change:** move `POST /auth/password/reset` into the `throttle:authentication` group in `routes/auth.php`.
+**Acceptance:**
+- [ ] Integration test: the 11th request in a minute from one IP returns `429` with `Retry-After`.
+- [ ] The existing reset flow test still passes.
+
+### 0.4 Security header defaults (no CSP) · P0 · XS · Upstream: yes
+**Why:** F8. These changes are safe for every install.
+**Change** in `SetSecurityHeaders::$headers`: set `X-XSS-Protection: 0`; `Referrer-Policy: strict-origin-when-cross-origin`; add `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`. Keep XFO and nosniff. COOP, HSTS and CSP stay out of this PR (see 2.1).
+**Acceptance:**
+- [ ] Unit test asserts the exact header set on a normal response.
+- [ ] A header that's already set on the response is still not overwritten (existing behavior).
+
+---
+
+## Phase 1 — Operable, hardened deployment (P1)
+
+Order: **1.1 → 1.2 → 1.3.** The compose stack's acceptance criteria (read-only rootfs, non-root, `/up` healthcheck) depend on the first two. The previous draft had this order backwards.
+
+### 1.1 `/up` health endpoint · P1 · S · Upstream: yes
+**Change:**
+- `GET /up`, registered in `RouteServiceProvider` **outside** the `web`/`api` groups: no session, no CSRF, no auth, no throttle. It must be registered before any SPA catch-all.
+- Returns `200 {"status":"ok"}` when the DB (`select 1`) and cache (`get` of a fixed key) both respond, otherwise `503 {"status":"fail"}`. No versions, hostnames or error text in the body.
+**Acceptance:**
+- [ ] Integration tests: 200 when healthy; 503 when the DB connection throws (mocked); 503 when the cache throws.
+- [ ] The response has no `Set-Cookie` header, and `redis-cli dbsize` doesn't grow across 100 probes.
+- [ ] With the DB container stopped, the 503 arrives within 5 s (the healthcheck timeout). Set a short PDO connect timeout if needed.
+
+### 1.2 Non-root, read-only-capable image · P1 · M · Upstream: yes (open a Discussion first) · Depends: 0.2, 1.1
+**Key design decision:** non-root is **opt-in at runtime**, not forced with a Dockerfile `USER` line. The entrypoint branches on `id -u`:
+- **uid 0 (legacy mode):** today's behavior, unchanged. Ports 80/443, certbot when `LE_EMAIL` is set, and crond for certbot renew. This keeps `docker-compose.example.yml` working as is.
+- **non-root mode:** nginx on `:8080`, no certbot, no crond. supervisord, nginx, php-fpm and the queue run as the `nginx` user, and nothing is written outside `/tmp`, `/app/var` and `/app/storage`.
+
+**Change:**
+1. Add a `.dockerignore`: `node_modules`, `vendor`, `.git`, `storage/*` (keep the skeleton dirs), `tests`, `public/assets`, `*.md`, `deploy/`, `branding/`.
+2. Add a supervisord `[program:scheduler]` that runs `php artisan schedule:work` in both modes, replacing the root crontab's `schedule:run` line.
+3. Build time: create the `/app/.env -> /app/var/.env` symlink and an `nginx-unprivileged.conf` (listen 8080, pid and temp paths under `/tmp`). Replace `chmod 777` with `chown nginx:nginx` on `storage`, `bootstrap/cache` and `var` only.
+4. supervisord: socket, pid and logs under `/tmp`, with child logs going to stdout/stderr. php-fpm: drop the `user`/`group` directives in non-root mode (they're ignored and generate warnings).
+5. Entrypoint in non-root mode: skip the `mkdir /var/log/*`, the symlink and the nginx config copy (all done at build time). Fail fast with a clear message if `/app/var` isn't writable.
+6. `HEALTHCHECK` that runs `wget -qO- http://127.0.0.1:${PORT}/up` (`PORT` is 80 or 8080 depending on mode).
+7. `APP_AUTO_MIGRATE` (default `true`) gates `migrate --seed --force` on boot.
+8. Look up the `nginx` uid/gid in the image (Alpine is normally `100:101`; don't hardcode `101`) and document it in `.github/docker/README.md`.
+
+**Acceptance:**
+- [ ] `docker run --read-only --tmpfs /tmp --user nginx -v var:/app/var -v storage:/app/storage …` boots to healthy.
+- [ ] In that container, `ps -o user,comm` shows no `root` processes.
+- [ ] The unchanged `docker-compose.example.yml` still boots, serves on 80, and the LE path still runs when `LE_EMAIL` is set.
+- [ ] The scheduler runs in both modes: a scheduled task fires within 2 min of boot (check `activity_logs` or a test schedule).
+- [ ] The image is ≤ the v1.15.1 image size + 5%, and the build context is < 50 MB with `.dockerignore`.
+
+### 1.3 Fork compose stack · P1 · M · Upstream: no (fork-only, `deploy/compose/`) · Depends: 1.2
+**Files:** `compose.yml`, `panel.env.example`, `db.env.example`, `cache.env.example`, `README.md`, `verify.sh`. The real `*.env` files are gitignored and loaded with `env_file:`.
+
+**Spec:**
+- Services: `panel` (fork image built from 1.2, running as `nginx`), `database` (`mariadb:11.4` LTS, pinned by digest), `cache` (`redis:7-alpine`, pinned by digest; see Open question 3).
+- Networks: `backend` (`internal: true`) has `database`, `cache` and `panel`. `frontend` has `panel` only, since it needs outbound access to Wings, SMTP and reCAPTCHA. **Only the panel publishes a port:** `${PANEL_BIND:-127.0.0.1}:${PANEL_PORT:-8080}:8080`. TLS terminates at the user's reverse proxy. Document `TRUSTED_PROXIES` with Caddy, Traefik and nginx examples.
+- Every service gets: an explicit non-root `user:`; `security_opt: [no-new-privileges:true]`; `cap_drop: [ALL]` with **no** add-backs (the README must justify any added cap); `read_only: true` plus `tmpfs` (`/tmp`; plus `/run/mysqld` for MariaDB); `pids_limit`; memory and CPU limits; `restart: unless-stopped`; `logging: { driver: local, options: { max-size: 10m, max-file: "3" } }`.
+- MariaDB: `user: mysql`, `MARIADB_AUTO_UPGRADE=1`, named volume `db-data`, no `--default-authentication-plugin`. Healthcheck: `healthcheck.sh --connect --innodb_initialized`.
+- Redis: `requirepass` from the env file. An ACL denies `FLUSHALL CONFIG DEBUG MODULE` to the default user (`rename-command` is deprecated). `--save ""` by default, with persistence optional. Healthcheck: `redis-cli ping` with `REDISCLI_AUTH` set from env, never `-a` on argv.
+- Panel: `depends_on: { database: { condition: service_healthy }, cache: { condition: service_healthy } }`. Healthcheck on `/up`. Named volumes `panel-var` and `panel-storage`.
+- README: setup in three commands, upgrades (pull, then `up -d`; `APP_AUTO_MIGRATE`), backup and restore (`mariadb-dump` plus the `panel-var` volume, which holds `APP_KEY`), and how to run Wings next to the stack. Wings must **not** join `backend`.
+
+**Acceptance** (automated in `verify.sh`, runnable in CI):
+- [ ] `docker compose config` validates. From a clean checkout with copied env examples, `up -d` reaches all-`healthy` in ≤ 120 s.
+- [ ] `docker compose port database 3306` and `docker compose port cache 6379` return nothing, and `ss -ltn` on the host shows no 3306/6379 listener.
+- [ ] `docker compose exec database` can't reach the internet (internal network). The panel can reach DB, cache and an external host.
+- [ ] `docker inspect` on each service shows `ReadonlyRootfs=true`, `no-new-privileges`, `CapDrop=[ALL]`, empty `CapAdd`, non-root `User`, and memory/PID limits.
+- [ ] `php artisan cache:clear` and the queue worker still work under the Redis ACL.
+- [ ] After setup, `git status` shows no new tracked files, and `*.env` is ignored.
+- [ ] `p:user:make` → log in → `docker compose restart` → the session is still valid.
+
+---
+
+## Phase 2 — Security hardening (P1/P2)
+
+Each item is its own PR.
+
+### 2.1 Content-Security-Policy and HSTS · P2 · M · Upstream: yes · Depends: 0.4
+**Change:**
+- `APP_CSP_MODE=off|report|enforce` (upstream default `off`; fork stack `report`). `APP_CSP_EXTRA_{SCRIPT,STYLE,IMG,CONNECT,FONT,FRAME}_SRC` let admins append sources. Reports go to `report-uri /csp-report`, which logs at a rate-limited debug level.
+- A per-request nonce, exposed to Blade (e.g. `@cspNonce`) and to webpack (`__webpack_nonce__`), on **all** inline scripts. That includes every Blade view, not just `wrapper.blade.php`/`scripts.blade.php` (F14: 28 views).
+- Baseline: `default-src 'self'; script-src 'self' 'nonce-…' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' wss: https:; frame-src https://www.google.com/recaptcha/; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'`. `'unsafe-inline'` styles are needed by styled-components.
+- Remove the IE-only `oss.maxcdn.com` shims from the admin layout instead of allowlisting them.
+- HSTS: `Strict-Transport-Security: max-age=31536000` only when `$request->isSecure()` **and** `APP_HSTS=true` (default off). `Cross-Origin-Opener-Policy: same-origin` ships here too, behind the same mode flag (it can break reCAPTCHA popups).
+- Split it into two PRs if review asks: (a) nonce plumbing with no headers, then (b) the header and modes.
+
+**Acceptance:**
+- [ ] Feature tests assert the headers for each mode, and that the nonce changes per request and matches the rendered `<script nonce>`.
+- [ ] With `enforce`, zero CSP violations in the browser console on this checklist (included in the PR): login with reCAPTCHA on, 2FA checkpoint, dashboard, console (websocket to a Wings node), file editor, backups, every admin index page, and admin node/server/egg edit pages.
+- [ ] With `off` (the default), the response headers are byte-identical to post-0.4.
+
+### 2.2 Login, 2FA and account rate limits · P1 · S · Upstream: yes
+**Change** (`RouteServiceProvider::configureRateLimiting`):
+- **2FA checkpoint** (`auth.login-checkpoint`; the previous draft used the wrong route name) gets its own limiter: 5/min per IP **and** 5/min per pending `user_id` from the `auth_confirmation_token` session. That caps TOTP guesses per account no matter how many IPs are used.
+- **Login** gets an added 5/min per normalized (`mb_strtolower(trim())`) `user` input, on top of the existing 10/min per IP.
+- **Account-security actions** get a new per-user limiter `account.sensitive`: 10/hour per user for password change, email change, API key create, 2FA enable/disable, SSH key create. Configurable in `config/http.php`.
+- **Server reinstall** gets a new `ResourceLimit::Reinstall` case (per server, 1 per 5 min), matching the existing pattern. Backups already have a `ResourceLimit` and are out of scope.
+- **UI:** `httpErrorToHuman` shows "Too many attempts — try again in N s" on 429, using `Retry-After`.
+
+**Acceptance:**
+- [ ] One integration test per limiter: going over the limit returns 429 with `Retry-After`, and the bucket keys behave as specified (a different IP against the same account is still limited).
+- [ ] Jest test for the 429 message formatting.
+- [ ] The existing test suite passes unchanged.
+
+### 2.3 Session and cookie hardening · P1 · S · Upstream: yes
+**Change:**
+- `session.secure` defaults to `str_starts_with(env('APP_URL'), 'https://')` when `SESSION_SECURE_COOKIE` is unset. An explicit env value still wins.
+- Regenerate the session ID on 2FA enable/disable and email change (password change already logs out other devices).
+- Optional `SESSION_ABSOLUTE_LIFETIME` (minutes, default off) through a small middleware that stores the login timestamp. Document `SESSION_LIFETIME` and the opt-in `__Host-` cookie name.
+**Acceptance:**
+- [ ] Tests: with an https `APP_URL` the cookie has `Secure`; with http it doesn't; an explicit env value overrides both.
+- [ ] Tests: the session ID changes after 2FA enable, 2FA disable and email change.
+- [ ] Test: with the absolute lifetime set, a session older than it is logged out even when active.
+
+### 2.4 API key expiry in the client UI · P2 · S · Upstream: yes
+**Why:** F11. The column exists but users can't use it.
+**Change:** `expires_at` on client API key create (presets: never, 7, 30, 90 days, or a custom date) and shown in the key list ("Expired" badge). Confirm that Sanctum rejects expired tokens for both client and application keys, and add a test either way.
+**Acceptance:**
+- [ ] Integration test: an expired key returns 401 on the client API and the application API.
+- [ ] Creating a key with no expiry behaves exactly as it does today.
+- [ ] Jest or RTL test for the expiry preset → date mapping.
+
+### 2.5 2FA nudges (no forced change) · P2 · S · Upstream: yes (open a Discussion first)
+**Change:**
+- A dismissible dashboard banner for users without TOTP, linking to account security. Dismissal lasts 30 days (see Open question 1 for where to store it).
+- The admin user list gets a 2FA column and filter. The admin overview shows a count of admins without 2FA.
+- When `2fa_required` is `1` (admins) or `2` (all) and some users who are required to have 2FA don't, the admin settings page shows a warning with the count.
+**Acceptance:**
+- [ ] Jest test for the banner visibility logic (TOTP on → never shown; dismissed less than 30 days ago → hidden).
+- [ ] PHP test for dismissal persistence.
+- [ ] Nothing changes for users who already have 2FA.
+
+### 2.6 CI and supply-chain hygiene · P1 · S · Upstream: partly (pins and Dependabot yes; audit gate is fork-first)
+**Change:**
+- `ci.yaml`: add `vendor/bin/phpstan analyse` and `composer audit --locked`. `build.yaml`: add `yarn test` and `yarn audit --groups dependencies --level high` (Yarn 1, so **not** `yarn npm audit`). The audit allowlist is `.github/audit-allowlist.json`, and each entry needs a reason and an expiry date.
+- `.github/dependabot.yml`: composer, npm, github-actions and docker ecosystems, grouped weekly.
+- Pin every `uses:` by commit SHA, with the tag in a trailing comment.
+- `docker.yaml`: Trivy scan of the built image (fail on critical with a fix available), a `syft` SBOM as a build artifact, and the SARIF uploaded to code scanning. (Can be a follow-up PR, P2.)
+- Track major frontend upgrades as separate future work, outside this plan: React 16 → 18, react-router 5 → 6, xterm 4 → `@xterm/xterm` 5, swr 0.2 → 2.
+**Acceptance:**
+- [ ] CI is green on `nitro/main` with the new steps.
+- [ ] A test PR that adds a known-vulnerable package fails the audit job.
+- [ ] `grep -E 'uses: [^@]+@v[0-9]' .github/workflows/*` returns nothing.
+
+---
+
+## Phase 3 — UX polish (P2)
+
+Low-risk and mostly frontend; each PR should be reviewable in under 15 minutes. **Shared acceptance:** before/after screenshots in the PR, a Jest test wherever there's logic, and no layout breakage at a 375 px viewport.
+
+| ID | Item | Acceptance (beyond the shared criteria) |
+|---|---|---|
+| 3.1 | **Cross-platform search hotkey** (F13): accept `Ctrl+/` on non-Mac and `⌘/` on Mac, and show the matching hint. Ignore it while typing in inputs, textareas or the console. | Jest: the right modifier per `navigator.platform`; no trigger from inside an `<input>`. **P1, XS** (do it early). |
+| 3.2 | **Console scroll:** a "Jump to bottom" button when scrolled up; new output doesn't move a user who has scrolled up; pause and resume autoscroll. | Manual: scroll up during heavy output and the view stays put, then the button returns to live output. |
+| 3.3 | **Power state feedback:** elapsed time while `starting`/`stopping`. | Jest for the timer formatting. |
+| 3.4 | **Websocket and empty states:** consistent copy for no servers, backups or schedules. On websocket disconnect, show a reconnect countdown and a "Retry now" button. | Manual: kill Wings → countdown appears; Retry reconnects. |
+| 3.5 | **Forms:** map server 422 field errors to inline field messages on screens that currently flash a generic error (audit them and list the screens in the PR). Disable submit while pending. | Jest for the 422 → Formik error mapping helper. |
+| 3.6 | **Accessibility:** focus trap and `aria-*` on `Modal`/`Dialog`, visible focus rings, labels on icon-only buttons, a contrast fix for `neutral` text on `gray-700`. | Lighthouse a11y ≥ 90 on dashboard, console and files (scores in the PR). |
+| 3.7 | **File manager:** breadcrumbs that collapse on mobile; a "Show hidden files" toggle (persisted per user via `usePersistedState`). | Jest for the hidden-file filter. |
+| 3.8 | **Timestamps:** every relative timestamp shows the absolute local and ISO time on hover/focus, through one shared component. | Jest for the component. |
+
+---
+
+## Phase 4 — Branding isolated from upstream code (P2)
+
+**Principle:** branding is *data and overrides*, never edits to upstream components.
+
+### 4.1 Branding seams · P2 · M · Upstream: yes (open a Discussion first)
+- `config/branding.php` driven by env: `APP_BRAND_NAME` (falls back to `APP_NAME`), `APP_BRAND_LOGO_URL`, `APP_BRAND_FAVICON_DIR`, `APP_BRAND_THEME_CSS`. Exposed to the SPA through `SiteConfiguration` in `wrapper.blade.php`.
+- Tailwind `primary` palette uses CSS variables (`rgb(var(--color-primary-500) / <alpha-value>)`), and the defaults equal the current `colors.blue`.
+- User-facing hard-coded "Pterodactyl" strings in Blade/TSX use the brand name. Copyright, license and footer credit lines stay unchanged (MIT attribution).
+**Acceptance:**
+- [ ] With every `APP_BRAND_*` unset, screenshots of login, dashboard and admin pages are pixel-identical to upstream.
+- [ ] Setting the env vars changes name, logo, favicon and primary color without a rebuild.
+
+### 4.2 Fork branding package · P2 · S · Upstream: no · Depends: 4.1
+- `branding/` (top-level): `logo.svg`, `favicons/`, `theme.css`, `brand.json`. A Docker build stage copies it into `public/branding/`, and `deploy/compose/panel.env.example` sets the env vars.
+- Decide how the update banner should behave for the fork (it polls upstream's `latest.json`); see Open question 4.
+**Acceptance:**
+- [ ] `git diff upstream/1.0-develop -- resources/ app/ config/` shows no fork-specific branding.
+- [ ] A trial `git merge upstream/1.0-develop` into `nitro/main` has no conflicts in `branding/` or `deploy/`.
+
+---
+
+## Backlog — power-user features (not scheduled)
+
+Each one needs a short design note and upstream buy-in (a GitHub Discussion) before any code. Listed roughly in order of value for effort.
+
+- **Command palette (`Ctrl/⌘+K`)** built on `SearchModal`: jump to server or page, run power actions, open a file path. Client-side fuzzy matching; actions gated by `Can`. Builds on 3.1.
+- **Keyboard shortcuts** with a `?` overlay: `g d`, `g c`/`g f`/`g b`, `/` to filter. Power keys (`s`/`r`/`x`) always confirm. Off by default and user-toggleable.
+- **Bulk actions:** multi-select servers for power actions (client API fan-out, a result toast per server); bulk-delete backups; bulk-toggle schedules. Admin: bulk suspend/unsuspend.
+- **Scoped client API keys** (read-only, power-only, files-only), "copy as curl", revoke-all. Builds on 2.4.
+- **Console:** per-server highlight rules, timestamp prefixes, download the visible log, multi-line input.
+- **Schedules:** cron helper with a human-readable preview and the next 5 run times.
+- **Saved dashboard views** and an optional compact table view.
+- **Resource graphs:** time-range selector.
+- **Webhooks** for server lifecycle events (crash, backup done, install finished), HMAC-signed.
+- **Admin security view:** filter the activity log by `auth:fail`/`auth:ip-blocked` and IP, with CSV/JSON export. The data is already being recorded.
+- **Light, dark and high-contrast themes** through the CSS variables from 4.1.
+
+---
+
+## Delivery order
+
+| # | ID | PR | Pri | Size | Upstream | Depends |
+|---|---|---|---|---|---|---|
+| 1 | 0.1 | Guard CDN dispatch to upstream repo | P0 | XS | Yes | — |
+| 2 | 0.2 | Stop logging APP_KEY/salt | P0 | XS | Yes | — |
+| 3 | 0.3 | Throttle password reset | P0 | XS | Yes | — |
+| 4 | 0.4 | Security header defaults | P0 | XS | Yes | — |
+| 5 | 2.6 | CI: phpstan, jest, audit, Dependabot, SHA pins | P1 | S | Partly | — |
+| 6 | 1.1 | `/up` health endpoint | P1 | S | Yes | — |
+| 7 | 2.2 | Checkpoint, per-account and sensitive-action limits | P1 | S | Yes | — |
+| 8 | 2.3 | Secure-cookie default, session regeneration | P1 | S | Yes | — |
+| 9 | 3.1 | Ctrl+/ search hotkey | P1 | XS | Yes | — |
+| 10 | 1.2 | Non-root, read-only-capable image | P1 | M | Discuss | 0.2, 1.1 |
+| 11 | 1.3 | Fork compose stack + `verify.sh` | P1 | M | Fork | 1.2 |
+| 12 | 2.4 | API key expiry UI | P2 | S | Yes | — |
+| 13 | 2.1 | CSP (nonce plumbing → modes) + HSTS | P2 | M | Yes | 0.4 |
+| 14 | 2.5 | 2FA nudges | P2 | S | Discuss | — |
+| 15 | 3.2–3.8 | UX polish (one PR each) | P2 | XS–S | Yes | — |
+| 16 | 4.1 | Branding seams | P2 | M | Discuss | — |
+| 17 | 4.2 | Fork branding package | P2 | S | Fork | 4.1 |
+
+---
+
+## Open questions (decide before the item starts)
+
+1. **2.5: where to store the banner dismissal.** Options: a nullable `users.mfa_nudge_dismissed_at` column (survives across devices, but adds a migration, which raises the upstream review bar), or `localStorage` (no migration, per device). *Recommendation: column.*
+2. **2.1: should upstream default to `report` rather than `off`?** `report` costs nothing for users but adds log noise. *Recommendation: `off` upstream, `report` in the fork.*
+3. **1.3: Redis or Valkey?** Redis 7.4+ is under RSAL/SSPL and Redis 8 under AGPL. Valkey 8 is BSD and drop-in compatible. Fine for self-hosting either way. *Recommendation: `valkey/valkey:8-alpine`, unless upstream docs need to say "Redis".*
+4. **4.2: update banner on the fork.** Keep tracking upstream releases, point at a fork manifest, or hide it? This depends on the fork's versioning scheme.
+
+---
+
+## Testing notes
+
+- **Docker access:** the previous draft says Docker 26 with the **vfs** driver works on this box. As of 2026-10-15 the session user gets `permission denied` on `/var/run/docker.sock`, so add the user to the `docker` group (or use rootless Docker) before Phase 1 work. vfs copies every layer in full: use `docker builder prune` between runs and rely on the `.dockerignore` from 1.2.
+- **Wings** needs the host Docker socket (`/var/run/docker.sock`, `/var/lib/pterodactyl`). Run it beside the stack, not inside `backend`. Nested Docker under vfs is fine for smoke tests only; test real game servers on a real node.
+- **PHP:** `vendor/bin/phpunit tests/Unit` (with `DB_HOST=UNIT_NO_DB`) and `vendor/bin/phpunit tests/Integration` with `.env.ci`, the same as `ci.yaml`. For integration tests against the compose stack, use `docker compose run`, not published ports.
+- **Frontend:** `yarn tsc && yarn lint && yarn test && yarn build:production`.
+- **Security checks:** `curl -sI http://127.0.0.1:8080/` for headers (compare against Mozilla Observatory's rules by hand, since the box isn't public); `trivy image <img>`; `composer audit --locked`; `yarn audit`.
+- **Smoke test for each PR:** log in, 2FA enable/disable, create a server against a test Wings node (when available), open the console, edit a file, create and restore a backup.
