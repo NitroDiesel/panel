@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Pterodactyl\Models\Database;
 use Pterodactyl\Enum\ResourceLimit;
 use Illuminate\Support\Facades\Route;
+use Pterodactyl\Http\Controllers\Base;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\RateLimiter;
 use Pterodactyl\Http\Middleware\TrimStrings;
@@ -36,6 +37,10 @@ class RouteServiceProvider extends ServiceProvider
         Route::model('database', Database::class);
 
         $this->routes(function () {
+            // Registered ahead of every group so the React catch-all route never matches it, and
+            // outside of the "web" group so that health probes never start a session.
+            Route::get('/up', Base\HealthController::class)->name('health');
+
             Route::middleware('web')->group(function () {
                 Route::middleware(['auth.session', RequireTwoFactorAuthentication::class])
                     ->group(base_path('routes/base.php'));
