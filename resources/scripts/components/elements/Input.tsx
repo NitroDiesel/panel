@@ -7,7 +7,7 @@ export interface Props {
 }
 
 const light = css<Props>`
-    ${tw`bg-white border-neutral-200 text-neutral-800`};
+    ${tw`bg-neutral-50 border-neutral-200 text-neutral-800`};
     &:focus {
         ${tw`border-primary-400`}
     }

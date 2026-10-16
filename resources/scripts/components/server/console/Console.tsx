@@ -20,10 +20,13 @@ import { ChevronDoubleRightIcon } from '@heroicons/react/solid';
 import 'xterm/css/xterm.css';
 import styles from './style.module.css';
 
+// The terminal keeps its own palette whatever the panel theme is.
+const terminalBlack = '#131a20';
+
 const theme = {
-    background: th`colors.black`.toString(),
+    background: terminalBlack,
     cursor: 'transparent',
-    black: th`colors.black`.toString(),
+    black: terminalBlack,
     red: '#E54B4B',
     green: '#9ECE58',
     yellow: '#FAED70',

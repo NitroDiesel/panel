@@ -6,11 +6,11 @@
     @apply transition-all duration-100;
 
     &:hover, &[aria-expanded="true"] {
-      @apply bg-neutral-600 text-white;
+      @apply bg-neutral-600 text-neutral-50;
     }
 
     &:focus, &:focus-within, &:active {
-      @apply ring-2 ring-opacity-50 ring-neutral-300 text-white;
+      @apply ring-2 ring-opacity-50 ring-neutral-300 text-neutral-50;
     }
 
     & svg {

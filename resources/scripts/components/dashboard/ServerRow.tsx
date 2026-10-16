@@ -24,7 +24,7 @@ const Icon = memo(
 
 const IconDescription = styled.p<{ $alarm: boolean }>`
     ${tw`text-sm ml-2`};
-    ${(props) => (props.$alarm ? tw`text-white` : tw`text-neutral-400`)};
+    ${(props) => (props.$alarm ? tw`text-neutral-50` : tw`text-neutral-400`)};
 `;
 
 const StatusIndicatorBox = styled(GreyRowBox)<{ $status: ServerPowerState | undefined }>`

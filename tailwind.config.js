@@ -2,7 +2,7 @@ const colors = require('tailwindcss/colors');
 
 /**
  * Colors that themes may change are CSS variables holding comma-separated channels
- * (HSL for the gray ramp, RGB for the primary ramp). Their defaults live in
+ * (HSL for the gray ramp, RGB for the primary ramp and black). Their defaults live in
  * resources/scripts/assets/tailwind.css and match the values this file used to
  * hard-code, so the default look is unchanged.
  */
@@ -33,7 +33,7 @@ module.exports = {
                 header: ['var(--font-header)'],
             },
             colors: {
-                black: '#131a20',
+                black: variable('rgb', '--color-black'),
                 // "primary" and "neutral" are deprecated, prefer the use of "blue" and "gray"
                 // in new code.
                 primary: ramp('rgb', 'primary'),

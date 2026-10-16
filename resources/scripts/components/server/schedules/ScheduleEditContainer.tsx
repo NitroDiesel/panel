@@ -94,7 +94,7 @@ export default () => {
                                     {schedule.name}
                                     {schedule.isProcessing ? (
                                         <span
-                                            css={tw`flex items-center rounded-full px-2 py-px text-xs ml-4 uppercase bg-neutral-600 text-white`}
+                                            css={tw`flex items-center rounded-full px-2 py-px text-xs ml-4 uppercase bg-neutral-600 text-neutral-50`}
                                         >
                                             <Spinner css={tw`w-3! h-3! mr-2`} />
                                             Processing
