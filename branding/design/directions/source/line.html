@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Direction: line map</title>
+<style>
+@font-face { font-family: Overpass; src: url(../fonts/overpass-latin-wght-normal.woff2) format('woff2'); font-weight: 100 900; }
+@font-face { font-family: 'JetBrains Mono'; src: url(../fonts/jetbrains-mono-latin-wght-normal.woff2) format('woff2'); font-weight: 100 800; }
+:root {
+  --ground: #f2f4f7;      /* cool sign-white ground */
+  --surface: #ffffff;
+  --ink: #15202b;         /* near-black blue ink */
+  --ink-2: #4a5866;
+  --ink-3: #6b7885;
+  --rule: #d9dee4;
+  --line-fra: #0a7a5a;    /* Frankfurt line: green */
+  --line-ams: #c2410c;    /* Amsterdam line: orange */
+  --accent: #1d4ed8;      /* interactive: signal blue */
+  --running: #0a7a5a; --starting: #b45309; --stopped: #6b7885; --suspended: #b91c1c; --installing: #1d4ed8;
+  --term: #101820; --term-ink: #d7e0e8;
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Overpass, system-ui, sans-serif; color: var(--ink); background: var(--ground); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+.screen { display: none; min-height: 100vh; }
+:target { display: block; }
+header.bar { background: var(--ink); color: #fff; height: 56px; display: flex; align-items: center; gap: 24px; padding: 0 24px; }
+.brand { font-weight: 800; font-size: 18px; letter-spacing: -0.01em; }
+.search { flex: 1; max-width: 420px; height: 36px; border-radius: 8px; background: rgba(255,255,255,.1); color: #c8d2dc; display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 14px; }
+.search kbd { margin-left: auto; font: 600 12px Overpass; color: #c8d2dc; border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 1px 6px; }
+.bar nav { margin-left: auto; display: flex; gap: 20px; font-weight: 600; font-size: 14px; }
+.bar nav a { color: #c8d2dc; text-decoration: none; } .bar nav a[aria-current] { color: #fff; }
+main { max-width: 1120px; margin: 0 auto; padding: 32px 24px 64px; }
+h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.filters { display: flex; gap: 4px; background: #e3e7ec; padding: 3px; border-radius: 9px; }
+.filters button { border: 0; background: transparent; font: 600 14px Overpass; color: var(--ink-2); padding: 6px 12px; border-radius: 6px; }
+.filters button[aria-pressed=true] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(21,32,43,.12); }
+.line { position: relative; margin-bottom: 32px; }
+.line-name { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 15px; margin: 0 0 8px 0; }
+.line-name .roundel { width: 22px; height: 22px; border-radius: 50%; border: 5px solid var(--c); background: #fff; }
+.line-name small { font-weight: 600; color: var(--ink-3); font-size: 13px; }
+.stops { list-style: none; padding: 0; position: relative; }
+.stops::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 6px; border-radius: 3px; background: var(--c); }
+.stop { position: relative; display: grid; grid-template-columns: 40px 1fr 190px 150px 220px; align-items: center; min-height: 64px; padding-right: 16px; }
+.stop + .stop { border-top: 1px solid var(--rule); margin-left: 40px; padding-left: 0; grid-template-columns: 1fr 190px 150px 220px; }
+.stop + .stop .marker { position: absolute; left: -40px; }
+.marker { width: 26px; height: 26px; border-radius: 50%; margin-left: 0; display: grid; place-items: center; background: #fff; border: 4px solid var(--ink); z-index: 1; }
+.m-running { background: var(--ink); }
+.m-starting { background: linear-gradient(90deg, var(--ink) 50%, #fff 50%); }
+.m-stopped { background: #fff; }
+.m-suspended { background: #fff; border-color: var(--suspended); }
+.m-suspended::after { content: ''; width: 14px; height: 4px; background: var(--suspended); transform: rotate(-45deg); }
+.m-installing { border-radius: 6px; background: #fff; border-color: var(--installing); }
+.name { font-weight: 700; font-size: 16px; }
+.name small { display: block; font-weight: 500; font-size: 13px; color: var(--ink-3); }
+.addr { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 14px; }
+.state { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.s-running { color: var(--running); } .s-starting { color: var(--starting); } .s-stopped { color: var(--stopped); } .s-suspended { color: var(--suspended); } .s-installing { color: var(--installing); }
+.use { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; display: grid; gap: 4px; }
+.meter { height: 4px; background: #e3e7ec; border-radius: 2px; } .meter i { display: block; height: 100%; border-radius: 2px; background: var(--ink); }
+/* console */
+.crumbs { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--ink-3); margin-bottom: 8px; }
+.crumbs .seg { width: 40px; height: 6px; border-radius: 3px; background: var(--line-fra); }
+.tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--rule); margin: 20px 0 24px; overflow-x: auto; }
+.tabs a { padding: 10px 0; font-weight: 700; font-size: 14px; color: var(--ink-2); text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+.tabs a[aria-current] { color: var(--ink); border-color: var(--line-fra); }
+.power { display: flex; gap: 8px; }
+.btn { font: 700 14px Overpass; border-radius: 8px; padding: 9px 16px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.danger { color: var(--suspended); }
+.console-grid { display: grid; grid-template-columns: 1fr 280px; gap: 24px; }
+.term { background: var(--term); color: var(--term-ink); border-radius: 12px; padding: 16px 18px; font: 13px/1.6 'JetBrains Mono', monospace; height: 470px; overflow: hidden; display: flex; flex-direction: column; }
+.term .log { flex: 1; overflow: hidden; white-space: pre; }
+.term .warn { color: #fbbf24; } .term .info { color: #7dd3fc; }
+.term .cmd { border-top: 1px solid rgba(255,255,255,.12); padding-top: 10px; color: #8aa0b2; }
+.facts { background: var(--surface); border-radius: 12px; padding: 4px 18px; align-self: start; }
+.facts div { display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--rule); font-size: 14px; }
+.facts div:first-child { border-top: 0; }
+.facts dt { color: var(--ink-3); } .facts dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  header.bar { gap: 12px; padding: 0 16px; } .search span, .bar nav a:not([aria-current]) { display: none; } .search { max-width: none; }
+  main { padding: 24px 16px 48px; } .head { flex-direction: column; align-items: start; }
+  .stop, .stop + .stop { grid-template-columns: 1fr auto; row-gap: 2px; padding: 10px 0; }
+  .stop:first-child { grid-template-columns: 40px 1fr auto; }
+  .addr, .use { display: none; }
+  .console-grid { grid-template-columns: 1fr; } .term { height: 320px; } .power { width: 100%; } .power .btn { flex: 1; }
+}
+</style>
+</head>
+<body>
+<section class="screen" id="list">
+  <header class="bar"><span class="brand">NitroDiesel</span><span class="search">⌕ <span>Search servers, pages, actions</span><kbd>Ctrl K</kbd></span><nav><a aria-current="page" href="#">Servers</a><a href="#">Account</a><a href="#">Admin</a></nav></header>
+  <main>
+    <div class="head"><h1>Your servers</h1><div class="filters"><button aria-pressed="true">All 6</button><button>Running 3</button><button>Need attention 2</button></div></div>
+    <section class="line" style="--c: var(--line-fra)">
+      <h2 class="line-name"><span class="roundel"></span>fra1-node-a <small>Frankfurt</small></h2>
+      <ol class="stops">
+        <li class="stop"><span class="marker m-running"></span><span class="name">Survival SMP<small>Paper 1.21.1</small></span><span class="addr">203.0.113.10:25565</span><span class="state s-running">Running · 7 / 20 players</span><span class="use">CPU 38% · 5.1 of 8 GiB<span class="meter"><i style="width:64%"></i></span></span></li>
+        <li class="stop"><span class="marker m-starting"></span><span class="name">Rust: Procedural 4k<small>Rust</small></span><span class="addr">203.0.113.10:28015</span><span class="state s-starting">Starting · 1m 12s</span><span class="use">CPU 141% · 9.4 of 12 GiB<span class="meter"><i style="width:78%"></i></span></span></li>
+        <li class="stop"><span class="marker m-running"></span><span class="name">Proxy (lobby network)<small>Bungeecord</small></span><span class="addr">203.0.113.10:25577</span><span class="state s-running">Running · 23 players</span><span class="use">CPU 6% · 412 MiB of 1 GiB<span class="meter"><i style="width:40%"></i></span></span></li>
+        <li class="stop"><span class="marker m-stopped"></span><span class="name">Creative build world<small>Vanilla 1.21.1</small></span><span class="addr">203.0.113.10:25566</span><span class="state s-stopped">Stopped 3 days ago</span><span class="use">Disk 6.8 of 20 GiB<span class="meter"><i style="width:34%"></i></span></span></li>
+      </ol>
+    </section>
+    <section class="line" style="--c: var(--line-ams)">
+      <h2 class="line-name"><span class="roundel"></span>ams1-node-b <small>Amsterdam</small></h2>
+      <ol class="stops">
+        <li class="stop"><span class="marker m-installing"></span><span class="name">Modded test (ATM9)<small>Forge 1.20.1</small></span><span class="addr">203.0.113.24:25570</span><span class="state s-installing">Installing · step 3 of 5</span><span class="use">Disk 2.1 of 50 GiB<span class="meter"><i style="width:4%"></i></span></span></li>
+        <li class="stop"><span class="marker m-suspended"></span><span class="name">Voice community<small>TeamSpeak 3</small></span><span class="addr">203.0.113.24:9987</span><span class="state s-suspended">Suspended by an admin</span><span class="use">Contact your host to restore it</span></li>
+      </ol>
+    </section>
+  </main>
+</section>
+
+<section class="screen" id="console">
+  <header class="bar"><span class="brand">NitroDiesel</span><span class="search">⌕ <span>Search servers, pages, actions</span><kbd>Ctrl K</kbd></span><nav><a aria-current="page" href="#">Servers</a><a href="#">Account</a><a href="#">Admin</a></nav></header>
+  <main>
+    <div class="crumbs"><span class="seg"></span>fra1-node-a · Frankfurt</div>
+    <div class="head"><div><h1>Survival SMP</h1><p class="state s-running" style="margin-top:6px"><span class="marker m-running" style="width:18px;height:18px;border-width:3px"></span>Running for 2 d 4 h · 7 of 20 players</p></div>
+      <div class="power"><button class="btn">Restart</button><button class="btn danger">Stop</button><button class="btn primary">Send command</button></div></div>
+    <nav class="tabs"><a aria-current="page" href="#">Console</a><a href="#">Files</a><a href="#">Backups</a><a href="#">Schedules</a><a href="#">Databases</a><a href="#">Users</a><a href="#">Network</a><a href="#">Startup</a><a href="#">Settings</a><a href="#">Activity</a></nav>
+    <div class="console-grid">
+      <div class="term"><div class="log"><span class="info">[18:52:07 INFO]</span> Running Paper 1.21.1 (build 132)
+<span class="info">[18:52:09 INFO]</span> Preparing level "world"
+<span class="info">[18:52:14 INFO]</span> Done (6.912s)! For help, type "help"
+<span class="info">[19:03:41 INFO]</span> mossbelly joined the game
+<span class="info">[19:03:42 INFO]</span> mossbelly[/198.51.100.7:51544] logged in at (-212.5, 64.0, 388.1)
+<span class="warn">[19:11:20 WARN]</span> Can't keep up! Is the server overloaded? Running 2140ms behind
+<span class="info">[19:14:02 INFO]</span> &lt;tamsin_k&gt; anyone at the nether hub?
+<span class="info">[19:14:30 INFO]</span> Saving the game (this may take a moment!)
+<span class="info">[19:14:31 INFO]</span> Saved the game
+<span class="info">[19:20:55 INFO]</span> ruthless_otter left the game</div><div class="cmd">› Type a command, for example: say Restart in 5 minutes</div></div>
+      <dl class="facts"><div><dt>Address</dt><dd>203.0.113.10:25565</dd></div><div><dt>CPU</dt><dd>38% of 200%</dd></div><div><dt>Memory</dt><dd>5.1 of 8 GiB</dd></div><div><dt>Disk</dt><dd>14.2 of 30 GiB</dd></div><div><dt>Network in / out</dt><dd>1.8 / 6.4 MB/s</dd></div></dl>
+    </div>
+  </main>
+</section>
+</body>
+</html>

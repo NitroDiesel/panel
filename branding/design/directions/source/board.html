@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Direction: departure board</title>
+<style>
+@font-face { font-family: 'Barlow Semi Condensed'; src: url(../fonts/barlow-semi-condensed-latin-500-normal.woff2) format('woff2'); font-weight: 500; }
+@font-face { font-family: 'Barlow Semi Condensed'; src: url(../fonts/barlow-semi-condensed-latin-700-normal.woff2) format('woff2'); font-weight: 700; }
+@font-face { font-family: Barlow; src: url(../fonts/barlow-latin-400-normal.woff2) format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url(../fonts/jetbrains-mono-latin-wght-normal.woff2) format('woff2'); font-weight: 100 800; }
+:root {
+  --field: #0f3b30;     /* racing green field */
+  --field-2: #0b2f26;   /* recessed band */
+  --field-3: #154a3d;   /* raised row */
+  --ink: #f3efe2;
+  --ink-2: #c3cdbf;
+  --ink-3: #8fa69a;
+  --signal: #f6c945;    /* departure-board yellow */
+  --running: #9be38a; --starting: #f6c945; --stopped: #b6c2b9; --suspended: #ff8f7a; --installing: #8fd3ff;
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Barlow, system-ui, sans-serif; color: var(--ink); background: var(--field); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+.screen { display: none; min-height: 100vh; }
+:target { display: block; }
+header.bar { height: 64px; display: flex; align-items: center; gap: 28px; padding: 0 32px; background: var(--field-2); }
+.brand { font: 700 22px 'Barlow Semi Condensed'; letter-spacing: 0.01em; }
+.bar nav { display: flex; gap: 22px; font: 500 16px 'Barlow Semi Condensed'; }
+.bar nav a { color: var(--ink-3); text-decoration: none; } .bar nav a[aria-current] { color: var(--signal); }
+.jump { margin-left: auto; font: 500 15px 'Barlow Semi Condensed'; color: var(--ink-2); background: var(--field-3); border-radius: 6px; padding: 7px 12px; }
+main { max-width: 1200px; margin: 0 auto; padding: 36px 32px 64px; }
+h1 { font: 700 40px/1 'Barlow Semi Condensed'; letter-spacing: -0.01em; }
+.head { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 28px; }
+.clock { font: 500 18px 'Barlow Semi Condensed'; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.board { display: grid; gap: 4px; }
+.row { display: grid; grid-template-columns: 1.6fr 1.1fr 1.2fr 1.2fr; align-items: center; gap: 16px; background: var(--field-3); padding: 14px 20px; border-radius: 4px; }
+.row.th { background: transparent; padding-block: 0 6px; font: 500 15px 'Barlow Semi Condensed'; color: var(--ink-3); }
+.name { font: 700 21px/1.15 'Barlow Semi Condensed'; } .name small { display: block; font: 400 14px Barlow; color: var(--ink-3); }
+.addr { font: 500 18px 'Barlow Semi Condensed'; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.state { font: 700 21px 'Barlow Semi Condensed'; } .state small { display: block; font: 400 14px Barlow; color: var(--ink-2); }
+.s-running { color: var(--running); } .s-starting { color: var(--starting); } .s-stopped { color: var(--stopped); } .s-suspended { color: var(--suspended); } .s-installing { color: var(--installing); }
+.next { font: 500 17px 'Barlow Semi Condensed'; color: var(--signal); font-variant-numeric: tabular-nums; } .next small { display: block; font: 400 14px Barlow; color: var(--ink-3); }
+.btn { font: 700 16px 'Barlow Semi Condensed'; border-radius: 4px; padding: 8px 18px; border: 0; background: var(--field-3); color: var(--ink); }
+.btn.primary { background: var(--signal); color: #1c1a0f; }
+.btn.danger { color: var(--suspended); }
+.tabs { display: flex; gap: 22px; margin: 22px 0 22px; overflow-x: auto; font: 500 17px 'Barlow Semi Condensed'; }
+.tabs a { color: var(--ink-3); text-decoration: none; padding-bottom: 6px; border-bottom: 3px solid transparent; white-space: nowrap; }
+.tabs a[aria-current] { color: var(--ink); border-color: var(--signal); }
+.split { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+.term { background: #08201a; border-radius: 6px; padding: 16px 18px; font: 13px/1.6 'JetBrains Mono', monospace; color: #dfe8df; height: 460px; display: flex; flex-direction: column; }
+.term .log { flex: 1; overflow: hidden; white-space: pre; } .term .warn { color: var(--signal); } .term .info { color: #8fc7a8; }
+.term .cmd { border-top: 1px solid rgba(255,255,255,.12); padding-top: 10px; color: var(--ink-3); }
+.side { display: grid; gap: 4px; align-content: start; }
+.side div { background: var(--field-3); border-radius: 4px; padding: 12px 16px; }
+.side span { font: 400 14px Barlow; color: var(--ink-3); } .side strong { display: block; font: 700 22px 'Barlow Semi Condensed'; font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  header.bar { padding: 0 16px; gap: 14px; } .bar nav a:not([aria-current]) { display: none; } .jump { font-size: 14px; }
+  main { padding: 24px 16px 48px; } .head { flex-direction: column; align-items: start; } h1 { font-size: 32px; }
+  .row { grid-template-columns: 1fr auto; } .row.th, .addr { display: none; } .next { grid-column: 1 / -1; font-size: 15px; } .next small { display: inline; margin-left: 6px; }
+  .split { grid-template-columns: 1fr; } .side { grid-template-columns: 1fr 1fr; } .term { height: 300px; }
+}
+</style>
+</head>
+<body>
+<section class="screen" id="list">
+  <header class="bar"><span class="brand">NitroDiesel</span><nav><a aria-current="page" href="#">Servers</a><a href="#">Account</a><a href="#">Admin</a></nav><span class="jump">Jump to… Ctrl K</span></header>
+  <main>
+    <div class="head"><h1>Your servers</h1><span class="clock">Thursday 19:21</span></div>
+    <div class="board">
+      <div class="row th"><span>Server</span><span>Address</span><span>Status</span><span>Next</span></div>
+      <div class="row"><span class="name">Survival SMP<small>Paper 1.21.1</small></span><span class="addr">203.0.113.10:25565</span><span class="state s-running">Running<small>7 of 20 players</small></span><span class="next">04:00 restart<small>daily schedule</small></span></div>
+      <div class="row"><span class="name">Rust: Procedural 4k<small>Rust</small></span><span class="addr">203.0.113.10:28015</span><span class="state s-starting">Starting<small>for 1 min 12 s</small></span><span class="next">Fri 18:00 wipe<small>weekly schedule</small></span></div>
+      <div class="row"><span class="name">Proxy (lobby network)<small>Bungeecord</small></span><span class="addr">203.0.113.10:25577</span><span class="state s-running">Running<small>23 players</small></span><span class="next">No schedules<small>&nbsp;</small></span></div>
+      <div class="row"><span class="name">Creative build world<small>Vanilla 1.21.1</small></span><span class="addr">203.0.113.10:25566</span><span class="state s-stopped">Stopped<small>3 days ago</small></span><span class="next">Backup 23:30<small>daily schedule</small></span></div>
+      <div class="row"><span class="name">Modded test (ATM9)<small>Forge 1.20.1</small></span><span class="addr">203.0.113.24:25570</span><span class="state s-installing">Installing<small>step 3 of 5</small></span><span class="next">Ready in about 4 min<small>estimate</small></span></div>
+      <div class="row"><span class="name">Voice community<small>TeamSpeak 3</small></span><span class="addr">203.0.113.24:9987</span><span class="state s-suspended">Suspended<small>by an admin</small></span><span class="next">Contact your host<small>to restore it</small></span></div>
+    </div>
+  </main>
+</section>
+<section class="screen" id="console">
+  <header class="bar"><span class="brand">NitroDiesel</span><nav><a aria-current="page" href="#">Servers</a><a href="#">Account</a><a href="#">Admin</a></nav><span class="jump">Jump to… Ctrl K</span></header>
+  <main>
+    <div class="head"><div><h1>Survival SMP</h1><p class="state s-running" style="font-size:19px;margin-top:6px">Running for 2 d 4 h <small style="display:inline;margin-left:8px">7 of 20 players</small></p></div><div style="display:flex;gap:8px"><button class="btn">Restart</button><button class="btn danger">Stop</button></div></div>
+    <nav class="tabs"><a aria-current="page" href="#">Console</a><a href="#">Files</a><a href="#">Backups</a><a href="#">Schedules</a><a href="#">Databases</a><a href="#">Users</a><a href="#">Network</a><a href="#">Startup</a><a href="#">Settings</a></nav>
+    <div class="split">
+      <div class="term"><div class="log"><span class="info">[18:52:07 INFO]</span> Running Paper 1.21.1 (build 132)
+<span class="info">[18:52:14 INFO]</span> Done (6.912s)! For help, type "help"
+<span class="info">[19:03:41 INFO]</span> mossbelly joined the game
+<span class="warn">[19:11:20 WARN]</span> Can't keep up! Is the server overloaded? Running 2140ms behind
+<span class="info">[19:14:02 INFO]</span> &lt;tamsin_k&gt; anyone at the nether hub?
+<span class="info">[19:14:30 INFO]</span> Saving the game (this may take a moment!)
+<span class="info">[19:14:31 INFO]</span> Saved the game
+<span class="info">[19:20:55 INFO]</span> ruthless_otter left the game</div><div class="cmd">› Type a command, for example: say Restart in 5 minutes</div></div>
+      <div class="side"><div><span>Next</span><strong style="color:var(--signal)">04:00 restart</strong></div><div><span>Address</span><strong>203.0.113.10:25565</strong></div><div><span>CPU</span><strong>38% of 200%</strong></div><div><span>Memory</span><strong>5.1 of 8 GiB</strong></div><div><span>Disk</span><strong>14.2 of 30 GiB</strong></div></div>
+    </div>
+  </main>
+</section>
+</body>
+</html>

@@ -282,6 +282,60 @@ Low-risk and mostly frontend; each PR should be reviewable in under 15 minutes. 
 
 ---
 
+## Phase 5 — Interface redesign: client and admin (P1/P2)
+
+**Brief (owner, 2026-10-16):** for both audiences, beginner-first, with density, shortcuts and the command palette opt-in. Hybrid scope: shared improvements go upstream-mergeable; tokens are CSS variables whose defaults are today's look; the fork's look ships only as theme values at the 4.1 seams. No image generation: directions are rendered in HTML. Product truth lives in `PRODUCT.md`, durable visual decisions in `DESIGN.md`.
+
+**Skills applied** (from `~/.claude/skills`): impeccable (Operate mode, `concept-seed` deal, craft floor, detector), app-designer (three-direction exploration, keep list, before/after), frontend-design, taste-skill v1/v2/v2-experimental, gpt-tasteskill, soft-skill and minimalist-skill (their rules where they fit an app; their landing-page mandates do not, which v2-experimental's own section 13 says for admin panels), design-audit and redesign-skill (audit first, targeted upgrades in the existing stack), stitch-skill (DESIGN.md format), typography, ui-animation, web-design-guidelines, shadcn (principles only: the panel is React 16 and Tailwind 3), bencium controlled, impact and innovative (asking before visual decisions; the owner delegated the pick), imagegen-frontend-web and image-to-code (not used: the owner ruled out image generation), unslop (all copy). **Precedence when they conflict:** accessibility floor, then the owner's brief, then impeccable's Operate rules, then the rest.
+
+### Audit of the current UI (baseline screenshots, 2026-10-16)
+- Server status is a 2 px colored bar at the row edge: color alone carries state, and on phones it is the only cue (HIGH).
+- The top navigation overflows at 390 px, hiding the account and sign-out icons with no cue (HIGH). Its icon-only links have no accessible names (HIGH).
+- `outline-none` on buttons, inputs and `:focus-visible` removes keyboard focus everywhere (HIGH). The viewport meta blocks pinch-zoom (HIGH).
+- The console sidebar is seven identical icon cards; power, file and admin screens show two to four filled colored buttons competing as primary.
+- All-caps micro labels ("SHOWING YOUR SERVERS"); two icon libraries (Font Awesome solid and Heroicons outline).
+- The admin area is stock AdminLTE 2: four saturated buttons on the overview, uppercase section labels.
+
+### Direction (exploration and choice)
+Three directions were rendered on the real server list and console with seeded data, at 1440 x 900 and 390 x 844. Screenshots and sources are in `branding/design/directions/`. The impeccable `concept-seed` deal (seed `579d82bc`, mode operate) assigned direction 4 of the grounded list: *line map*.
+
+| Direction | Ground, type, accent | Signature move | Verdict |
+|---|---|---|---|
+| **Line map** (chosen) | Light sign-white ground with a dark shell, Overpass (OFL), signal-blue actions; dark mode under `prefers-color-scheme` | Each node is a colored line; each server is a station whose marker shape (filled, half, ring, square, struck) and word give its state | Chosen: the grouping is real API data (`server.node`), status is readable without color, clearest on a phone, distinct from the category's dark grey |
+| Dyno sheet | Engine-oil brown-black, Archivo semi-condensed, amber | Load against the plan limit as gauge bands with a redline | Rejected as a world: near-black plus one amber accent is a known default. Its gauge bands become the opt-in dense view |
+| Departure board | Racing-green field, Barlow Semi Condensed, signal yellow | Server list as a departures board with a Next column | Rejected: the Next column needs one schedules request per server; identical filled rows; yellow overloaded |
+
+Rejected screenshots: `branding/design/directions/dyno-list-desktop.png`, `dyno-console-desktop.png`, `board-list-desktop.png`, `board-console-desktop.png` (and their `-mobile` lists).
+
+### Tokens
+Upstream seam (defaults equal today's values, so the default look does not change):
+- `--color-gray-{50..900}`, `--color-neutral-*` (alias), `--color-primary-{50..900}` as HSL channels consumed by Tailwind as `hsl(var(--x) / <alpha-value>)`.
+- `--color-shell` (navigation bar), `--font-sans`, `--font-header`.
+- Theme stylesheet seam: `APP_BRAND_THEME_CSS` (config `branding.theme_css`) adds one stylesheet after the app's own, on the client and the admin layouts.
+
+Fork theme (`branding/theme.css`), light by default, dark under `prefers-color-scheme: dark`, values in `DESIGN.md`:
+- Light: ground `#f2f4f7`, surface `#ffffff`, border `#7b8794`, ink `#15202b`, secondary ink `#4a5866`, muted ink `#56626e`, shell `#15202b`, actions `#1d4ed8`. Full light and dark roles with measured contrast are in `DESIGN.md`.
+- Node lines (one per node, by name): magenta, cyan, olive, violet, slate; kept apart from the state hues (running green, starting amber, suspended red, installing blue, stopped grey).
+- Type: Overpass for interface text (tabular figures for numbers), the terminal keeps its monospace.
+
+### Screens, in priority order
+Each item ships tests for any new logic, keeps `tsc`, `lint`, `jest` and the production build green, and is checked by screenshot at desktop and mobile with the default theme and the fork theme.
+
+| ID | Item | Upstream | Acceptance |
+|---|---|---|---|
+| 5.0 | Accessibility floor: visible `:focus-visible` ring, pinch-zoom allowed, names on icon-only navigation, no clipped navigation at 320 px | Yes | Keyboard focus visible on every control on the four priority screens; no horizontal overflow at 320 px; axe-style name check passes for the nav |
+| 5.1 | Token seam (CSS variables, font and shell tokens) | Yes | With no theme set, screenshots of dashboard, console, files and admin are pixel-identical to before |
+| 5.2 | Theme stylesheet seam (`APP_BRAND_THEME_CSS`) | Yes | Feature test: link present when set, absent when unset, on client and admin layouts |
+| 5.3 | Fork theme: line-map values, Overpass, dark mode | Fork | Contrast of every text token pair on its ground is at least 4.5:1, measured; both schemes screenshotted |
+| 5.4 | Server list: grouped by node line, station markers with state words, filters (all, running, needs attention), opt-in dense view with load bands | Yes | Status readable with color removed (grayscale screenshot); Jest covers grouping, state words and filters; pagination and the admin "other servers" switch still work |
+| 5.5 | Console: header with state, one primary power action, compact facts list in place of seven cards | Yes | Power actions keep their confirmations and permissions; stats readable at 390 px |
+| 5.6 | Files: one primary action, breadcrumb that collapses on phones, clear empty and loading states | Yes | Existing file actions unchanged; empty directory shows how to add a file |
+| 5.7 | Settings (account and server): one form vocabulary, labels above inputs, errors below | Yes | Every existing setting still saves; validation messages shown inline |
+| 5.8 | Power-user layer, opt-in from Account: command palette (`Ctrl`/`⌘`+`K`), shortcut overlay (`?`), cross-platform search hotkey (PLAN 3.1) | Yes | Off by default; no animation on palette open or close; Jest covers matching and shortcut handling; full keyboard path |
+| 5.9 | Admin: AdminLTE colors on the same tokens, fork theme for admin, one primary action per page | Partly | Admin index pages and node/server/egg edit pages screenshot clean in both schemes; no regression in admin tests |
+
+---
+
 ## Backlog — power-user features (not scheduled)
 
 Each one needs a short design note and upstream buy-in (a GitHub Discussion) before any code. Listed roughly in order of value for effort.

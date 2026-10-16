@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Direction: dyno sheet</title>
+<style>
+@font-face { font-family: Archivo; src: url(../fonts/archivo-latin-wdth-normal.woff2) format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; }
+@font-face { font-family: 'JetBrains Mono'; src: url(../fonts/jetbrains-mono-latin-wght-normal.woff2) format('woff2'); font-weight: 100 800; }
+:root {
+  --ground: #17140f;   /* engine-oil brown-black */
+  --panel: #221e17;
+  --raise: #2c271e;
+  --ink: #efe7d8;      /* warm instrument white */
+  --ink-2: #b9ae9a;
+  --ink-3: #8c826f;
+  --rule: #3a3428;
+  --amber: #f0a020;    /* gauge backlight */
+  --redline: #e5533d;
+  --running: #8fcf6b; --starting: #f0a020; --stopped: #8c826f; --suspended: #e5533d; --installing: #7fb2e5;
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: Archivo, system-ui, sans-serif; color: var(--ink); background: var(--ground); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+.screen { display: none; min-height: 100vh; }
+:target { display: grid; grid-template-columns: 232px 1fr; }
+aside { background: var(--panel); padding: 20px 16px; display: flex; flex-direction: column; gap: 24px; }
+.brand { font-weight: 800; font-stretch: 75%; font-size: 22px; letter-spacing: 0.01em; color: var(--amber); }
+aside nav { display: grid; gap: 2px; }
+aside nav a { color: var(--ink-2); text-decoration: none; font-weight: 600; padding: 8px 10px; border-radius: 6px; font-size: 14px; }
+aside nav a[aria-current] { background: var(--raise); color: var(--ink); box-shadow: inset 3px 0 var(--amber); }
+.palette { margin-top: auto; font-size: 13px; color: var(--ink-3); }
+.palette kbd { font: 600 12px Archivo; color: var(--ink-2); background: var(--raise); border-radius: 4px; padding: 2px 6px; }
+main { padding: 32px 40px 56px; max-width: 1180px; }
+h1 { font-weight: 800; font-stretch: 80%; font-size: 34px; letter-spacing: -0.01em; line-height: 1.05; }
+.head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 24px; gap: 16px; }
+.sum { color: var(--ink-2); font-size: 14px; margin-top: 6px; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 600; font-size: 13px; color: var(--ink-3); padding: 0 12px 10px; font-stretch: 90%; }
+td { padding: 14px 12px; border-top: 1px solid var(--rule); vertical-align: middle; }
+.name { font-weight: 700; font-size: 16px; } .name small { display: block; font-weight: 500; font-size: 13px; color: var(--ink-3); }
+.addr { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 14px; font-stretch: 90%; }
+.state { font-weight: 700; font-size: 14px; white-space: nowrap; }
+.state::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; background: currentColor; vertical-align: 1px; }
+.s-running { color: var(--running); } .s-starting { color: var(--starting); } .s-stopped { color: var(--stopped); } .s-suspended { color: var(--suspended); } .s-installing { color: var(--installing); }
+.gauges { display: grid; gap: 6px; min-width: 260px; }
+.g { display: grid; grid-template-columns: 34px 1fr 74px; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; font-stretch: 85%; }
+.g b { font-weight: 600; color: var(--ink-2); text-align: right; }
+.band { position: relative; height: 8px; background: var(--raise); border-radius: 1px; }
+.band i { position: absolute; inset: 0 auto 0 0; background: var(--amber); border-radius: 1px; }
+.band::after { content: ''; position: absolute; right: 10%; top: -3px; bottom: -3px; width: 2px; background: var(--redline); }
+.band.hot i { background: var(--redline); }
+.btn { font: 700 14px Archivo; border-radius: 6px; padding: 9px 16px; border: 1px solid var(--rule); background: var(--raise); color: var(--ink); }
+.btn.primary { background: var(--amber); color: #1b1408; border-color: var(--amber); }
+.btn.danger { color: var(--suspended); }
+.tabs { display: flex; gap: 4px; margin: 20px 0 24px; overflow-x: auto; }
+.tabs a { padding: 7px 12px; font-weight: 600; font-size: 14px; color: var(--ink-2); text-decoration: none; border-radius: 6px; white-space: nowrap; }
+.tabs a[aria-current] { background: var(--raise); color: var(--ink); }
+.dyno { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+.dyno div { background: var(--panel); padding: 14px 16px; }
+.dyno span { font-size: 13px; color: var(--ink-3); }
+.dyno strong { display: block; font-weight: 700; font-stretch: 80%; font-size: 26px; font-variant-numeric: tabular-nums; margin: 2px 0 8px; }
+.dyno strong small { font-size: 14px; color: var(--ink-3); font-weight: 600; }
+.term { background: #0f0d09; border-radius: 10px; padding: 16px 18px; font: 13px/1.6 'JetBrains Mono', monospace; color: #d9d1c2; height: 420px; display: flex; flex-direction: column; }
+.term .log { flex: 1; overflow: hidden; white-space: pre; }
+.term .warn { color: var(--amber); } .term .info { color: #9fb8a0; }
+.term .cmd { border-top: 1px solid var(--rule); padding-top: 10px; color: var(--ink-3); }
+@media (max-width: 720px) {
+  :target { grid-template-columns: 1fr; } aside { flex-direction: row; align-items: center; padding: 12px 16px; } aside nav, .palette { display: none; }
+  main { padding: 20px 16px 48px; } .head { flex-direction: column; align-items: start; }
+  thead, td.addr, td.gaugecell { display: none; } tr { display: grid; grid-template-columns: 1fr auto; } td { border-top: 0; padding: 12px 0; } tr + tr td:first-child, tr + tr td + td { border-top: 1px solid var(--rule); }
+  .dyno { grid-template-columns: 1fr 1fr; } .term { height: 300px; }
+}
+</style>
+</head>
+<body>
+<section class="screen" id="list">
+  <aside><span class="brand">NitroDiesel</span><nav><a aria-current="page" href="#">Servers</a><a href="#">Account</a><a href="#">API keys</a><a href="#">Admin</a></nav><p class="palette"><kbd>Ctrl</kbd> <kbd>K</kbd> to jump anywhere</p></aside>
+  <main>
+    <div class="head"><div><h1>Your servers</h1><p class="sum">3 running, 1 starting, 2 need attention</p></div><button class="btn">Show all servers</button></div>
+    <table>
+      <thead><tr><th>Server</th><th>Address</th><th>Status</th><th>Load against plan limit</th></tr></thead>
+      <tbody>
+        <tr><td class="name">Survival SMP<small>Paper 1.21.1 · fra1-node-a</small></td><td class="addr">203.0.113.10:25565</td><td><span class="state s-running">Running, 7 / 20</span></td><td class="gaugecell"><div class="gauges"><div class="g">CPU<span class="band"><i style="width:19%"></i></span><b>38 / 200%</b></div><div class="g">RAM<span class="band"><i style="width:64%"></i></span><b>5.1 / 8 GiB</b></div></div></td></tr>
+        <tr><td class="name">Rust: Procedural 4k<small>Rust · fra1-node-a</small></td><td class="addr">203.0.113.10:28015</td><td><span class="state s-starting">Starting, 1m 12s</span></td><td class="gaugecell"><div class="gauges"><div class="g">CPU<span class="band"><i style="width:35%"></i></span><b>141 / 400%</b></div><div class="g">RAM<span class="band hot"><i style="width:92%"></i></span><b>11.0 / 12 GiB</b></div></div></td></tr>
+        <tr><td class="name">Proxy (lobby network)<small>Bungeecord · fra1-node-a</small></td><td class="addr">203.0.113.10:25577</td><td><span class="state s-running">Running, 23 players</span></td><td class="gaugecell"><div class="gauges"><div class="g">CPU<span class="band"><i style="width:6%"></i></span><b>6 / 100%</b></div><div class="g">RAM<span class="band"><i style="width:40%"></i></span><b>412 MiB / 1 GiB</b></div></div></td></tr>
+        <tr><td class="name">Creative build world<small>Vanilla 1.21.1 · fra1-node-a</small></td><td class="addr">203.0.113.10:25566</td><td><span class="state s-stopped">Stopped 3 days ago</span></td><td class="gaugecell"><div class="gauges"><div class="g">Disk<span class="band"><i style="width:34%"></i></span><b>6.8 / 20 GiB</b></div></div></td></tr>
+        <tr><td class="name">Modded test (ATM9)<small>Forge 1.20.1 · ams1-node-b</small></td><td class="addr">203.0.113.24:25570</td><td><span class="state s-installing">Installing, step 3 of 5</span></td><td class="gaugecell"><div class="gauges"><div class="g">Disk<span class="band"><i style="width:4%"></i></span><b>2.1 / 50 GiB</b></div></div></td></tr>
+        <tr><td class="name">Voice community<small>TeamSpeak 3 · ams1-node-b</small></td><td class="addr">203.0.113.24:9987</td><td><span class="state s-suspended">Suspended by an admin</span></td><td class="gaugecell" style="color:var(--ink-3);font-size:13px">Contact your host to restore it</td></tr>
+      </tbody>
+    </table>
+  </main>
+</section>
+<section class="screen" id="console">
+  <aside><span class="brand">NitroDiesel</span><nav><a aria-current="page" href="#">Servers</a><a href="#">Account</a><a href="#">API keys</a><a href="#">Admin</a></nav><p class="palette"><kbd>Ctrl</kbd> <kbd>K</kbd> to jump anywhere</p></aside>
+  <main>
+    <div class="head"><div><h1>Survival SMP</h1><p class="sum"><span class="state s-running">Running for 2 d 4 h</span> &nbsp; 203.0.113.10:25565</p></div><div style="display:flex;gap:8px"><button class="btn">Restart</button><button class="btn danger">Stop</button></div></div>
+    <nav class="tabs"><a aria-current="page" href="#">Console</a><a href="#">Files</a><a href="#">Backups</a><a href="#">Schedules</a><a href="#">Databases</a><a href="#">Users</a><a href="#">Network</a><a href="#">Startup</a><a href="#">Settings</a><a href="#">Activity</a></nav>
+    <div class="dyno"><div><span>CPU</span><strong>38% <small>of 200%</small></strong><span class="band"><i style="width:19%"></i></span></div><div><span>Memory</span><strong>5.1 <small>of 8 GiB</small></strong><span class="band"><i style="width:64%"></i></span></div><div><span>Disk</span><strong>14.2 <small>of 30 GiB</small></strong><span class="band"><i style="width:47%"></i></span></div><div><span>Players</span><strong>7 <small>of 20</small></strong><span class="band"><i style="width:35%"></i></span></div></div>
+    <div class="term"><div class="log"><span class="info">[18:52:07 INFO]</span> Running Paper 1.21.1 (build 132)
+<span class="info">[18:52:14 INFO]</span> Done (6.912s)! For help, type "help"
+<span class="info">[19:03:41 INFO]</span> mossbelly joined the game
+<span class="warn">[19:11:20 WARN]</span> Can't keep up! Is the server overloaded? Running 2140ms behind
+<span class="info">[19:14:02 INFO]</span> &lt;tamsin_k&gt; anyone at the nether hub?
+<span class="info">[19:14:30 INFO]</span> Saving the game (this may take a moment!)
+<span class="info">[19:14:31 INFO]</span> Saved the game
+<span class="info">[19:20:55 INFO]</span> ruthless_otter left the game</div><div class="cmd">› Type a command, for example: say Restart in 5 minutes</div></div>
+  </main>
+</section>
+</body>
+</html>
