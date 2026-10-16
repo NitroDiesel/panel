@@ -1,4 +1,4 @@
-import tw from 'twin.macro';
+import tw, { theme } from 'twin.macro';
 import { createGlobalStyle } from 'styled-components/macro';
 // @ts-expect-error untyped font file
 import font from '@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2';
@@ -30,8 +30,25 @@ export default createGlobalStyle`
         ${tw`m-0`};
     }
 
-    textarea, select, input, button, button:focus, button:focus-visible {
+    /* One focus indicator for keyboard users; text fields draw their own focus ring. */
+    :focus:not(:focus-visible) {
+        outline: none;
+    }
+
+    :focus-visible {
+        outline: 2px solid ${theme`colors.primary.400`.toString()};
+        outline-offset: 2px;
+    }
+
+    textarea, input:not([type='checkbox']):not([type='radio']) {
         ${tw`outline-none`};
+    }
+
+    /* Below 16px, iOS zooms the page when a field gains focus. */
+    @media (max-width: 639px) {
+        textarea, select, input {
+            font-size: 1rem !important;
+        }
     }
 
     input[type=number]::-webkit-outer-spin-button,
