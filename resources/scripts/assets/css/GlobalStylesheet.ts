@@ -1,4 +1,4 @@
-import tw, { theme } from 'twin.macro';
+import tw from 'twin.macro';
 import { createGlobalStyle } from 'styled-components/macro';
 // @ts-expect-error untyped font file
 import font from '@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2';
@@ -36,7 +36,7 @@ export default createGlobalStyle`
     }
 
     :focus-visible {
-        outline: 2px solid ${theme`colors.primary.400`.toString()};
+        outline: 2px solid rgb(var(--color-primary-400));
         outline-offset: 2px;
     }
 
@@ -73,7 +73,7 @@ export default createGlobalStyle`
         border-right-width: 4px;
         border-left-width: 4px;
         -webkit-border-radius: 9px 4px;
-        -webkit-box-shadow: inset 0 0 0 1px hsl(211, 10%, 53%), inset 0 0 0 4px hsl(209deg 18% 30%);
+        -webkit-box-shadow: inset 0 0 0 1px hsl(var(--color-gray-400)), inset 0 0 0 4px hsl(var(--color-gray-700));
     }
 
     ::-webkit-scrollbar-track-piece {

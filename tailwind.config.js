@@ -1,17 +1,26 @@
 const colors = require('tailwindcss/colors');
 
-const gray = {
-    50: 'hsl(216, 33%, 97%)',
-    100: 'hsl(214, 15%, 91%)',
-    200: 'hsl(210, 16%, 82%)',
-    300: 'hsl(211, 13%, 65%)',
-    400: 'hsl(211, 10%, 53%)',
-    500: 'hsl(211, 12%, 43%)',
-    600: 'hsl(209, 14%, 37%)',
-    700: 'hsl(209, 18%, 30%)',
-    800: 'hsl(209, 20%, 25%)',
-    900: 'hsl(210, 24%, 16%)',
+/**
+ * Colors that themes may change are CSS variables holding comma-separated channels
+ * (HSL for the gray ramp, RGB for the primary ramp). Their defaults live in
+ * resources/scripts/assets/tailwind.css and match the values this file used to
+ * hard-code, so the default look is unchanged.
+ */
+const variable = (fn, name) => ({ opacityVariable, opacityValue }) => {
+    if (opacityValue !== undefined) {
+        return `${fn}a(var(${name}), ${opacityValue})`;
+    }
+
+    return opacityVariable !== undefined ? `${fn}a(var(${name}), var(${opacityVariable}, 1))` : `${fn}(var(${name}))`;
 };
+
+const ramp = (fn, name) =>
+    [50, 100, 200, 300, 400, 500, 600, 700, 800, 900].reduce(
+        (scale, step) => ({ ...scale, [step]: variable(fn, `--color-${name}-${step}`) }),
+        {},
+    );
+
+const gray = ramp('hsl', 'gray');
 
 module.exports = {
     content: [
@@ -20,13 +29,14 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                header: ['"IBM Plex Sans"', '"Roboto"', 'system-ui', 'sans-serif'],
+                sans: ['var(--font-sans)'],
+                header: ['var(--font-header)'],
             },
             colors: {
                 black: '#131a20',
                 // "primary" and "neutral" are deprecated, prefer the use of "blue" and "gray"
                 // in new code.
-                primary: colors.blue,
+                primary: ramp('rgb', 'primary'),
                 gray: gray,
                 neutral: gray,
                 cyan: colors.cyan,

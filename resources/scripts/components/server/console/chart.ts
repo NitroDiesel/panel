@@ -12,11 +12,11 @@ import { DeepPartial } from 'ts-essentials';
 import { useState } from 'react';
 import { deepmerge, deepmergeCustom } from 'deepmerge-ts';
 import { theme } from 'twin.macro';
-import { hexToRgba } from '@/lib/helpers';
+import { cssVariable, hexToRgba } from '@/lib/helpers';
 
 ChartJS.register(LineElement, PointElement, Filler, LinearScale);
 
-const options: ChartOptions<'line'> = {
+const getBaseOptions = (): ChartOptions<'line'> => ({
     responsive: true,
     animation: false,
     plugins: {
@@ -45,15 +45,15 @@ const options: ChartOptions<'line'> = {
             type: 'linear',
             grid: {
                 display: true,
-                color: theme('colors.gray.700'),
+                color: `hsl(${cssVariable('--color-gray-700')})`,
                 drawBorder: false,
             },
             ticks: {
                 display: true,
                 count: 3,
-                color: theme('colors.gray.200'),
+                color: `hsl(${cssVariable('--color-gray-200')})`,
                 font: {
-                    family: theme('fontFamily.sans'),
+                    family: cssVariable('--font-sans'),
                     size: 11,
                     weight: '400',
                 },
@@ -68,10 +68,10 @@ const options: ChartOptions<'line'> = {
             tension: 0.15,
         },
     },
-};
+});
 
 function getOptions(opts?: DeepPartial<ChartOptions<'line'>> | undefined): ChartOptions<'line'> {
-    return deepmerge(options, opts || {});
+    return deepmerge(getBaseOptions(), opts || {});
 }
 
 type ChartDatasetCallback = (value: ChartDataset<'line'>, index: number) => ChartDataset<'line'>;

@@ -14,4 +14,16 @@ function hexToRgba(hex: string, alpha = 1): string {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export { hexToRgba };
+/**
+ * Returns the value of a CSS custom property set on the document root, for code
+ * that cannot use the variable directly, such as colors drawn on a canvas.
+ */
+function cssVariable(name: string, fallback = ''): string {
+    if (typeof document === 'undefined' || typeof getComputedStyle === 'undefined') {
+        return fallback;
+    }
+
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+export { hexToRgba, cssVariable };

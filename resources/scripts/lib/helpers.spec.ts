@@ -1,4 +1,4 @@
-import { hexToRgba } from '@/lib/helpers';
+import { cssVariable, hexToRgba } from '@/lib/helpers';
 
 describe('@/lib/helpers.ts', function () {
     describe('hexToRgba()', function () {
@@ -24,6 +24,31 @@ describe('@/lib/helpers.ts', function () {
             expect(hexToRgba('#fff')).toBe('#fff');
             expect(hexToRgba('#')).toBe('#');
             expect(hexToRgba('#fffffy')).toBe('#fffffy');
+        });
+    });
+
+    describe('cssVariable()', function () {
+        const values: Record<string, string> = { '--color-gray-700': ' 209, 18%, 30%' };
+
+        afterEach(function () {
+            // @ts-expect-error test globals
+            delete global.document;
+            // @ts-expect-error test globals
+            delete global.getComputedStyle;
+        });
+
+        it('should return the fallback without a document', function () {
+            expect(cssVariable('--color-gray-700', 'red')).toBe('red');
+        });
+
+        it('should return the trimmed value set on the root element', function () {
+            // @ts-expect-error minimal document stub
+            global.document = { documentElement: {} };
+            // @ts-expect-error minimal getComputedStyle stub
+            global.getComputedStyle = () => ({ getPropertyValue: (name: string) => values[name] || '' });
+
+            expect(cssVariable('--color-gray-700')).toBe('209, 18%, 30%');
+            expect(cssVariable('--missing', 'blue')).toBe('blue');
         });
     });
 });
