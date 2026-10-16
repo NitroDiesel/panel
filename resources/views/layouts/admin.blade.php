@@ -30,6 +30,10 @@
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/2.0.1/css/ionicons.min.css">
 
         @show
+
+        @if(config('branding.theme_css'))
+            <link rel="stylesheet" href="{{ config('branding.theme_css') }}">
+        @endif
     </head>
     <body class="hold-transition skin-blue fixed sidebar-mini">
         <div class="wrapper">

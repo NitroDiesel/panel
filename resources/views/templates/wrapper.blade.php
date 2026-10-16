@@ -34,6 +34,10 @@
 
         @yield('assets')
 
+        @if(config('branding.theme_css'))
+            <link rel="stylesheet" href="{{ config('branding.theme_css') }}">
+        @endif
+
         @include('layouts.scripts')
     </head>
     <body class="{{ $css['body'] ?? 'bg-neutral-50' }}">
